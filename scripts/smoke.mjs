@@ -58,7 +58,8 @@ async function main() {
     headers,
     body: {
       challengeToken,
-      signature
+      signature,
+      requestId: 'req_signed_0001'
     }
   });
   assertOk(executed, 'checkin/execute');
@@ -74,12 +75,30 @@ async function main() {
     headers,
     body: {
       sessionToken: executed.payload.sessionToken,
-      count: 100
+      count: 100,
+      requestId: 'req_session_0001'
     }
   });
   assertOk(sessionExecuted, 'checkin/execute session');
   if (sessionExecuted.payload.applied !== 100) {
     throw new Error('session applied checkins should be 100');
+  }
+  if (!sessionExecuted.payload.sessionToken || sessionExecuted.payload.sessionToken === executed.payload.sessionToken) {
+    throw new Error('session token should rotate on execute');
+  }
+
+  const replay = await call(checkinExecute, {
+    method: 'POST',
+    headers,
+    body: {
+      sessionToken: sessionExecuted.payload.sessionToken,
+      count: 100,
+      requestId: 'req_session_0001'
+    }
+  });
+  assertOk(replay, 'checkin/execute idempotent replay');
+  if (!replay.payload.idempotent) {
+    throw new Error('replay should be marked idempotent');
   }
 
   const after = await call(checkinState, { headers });

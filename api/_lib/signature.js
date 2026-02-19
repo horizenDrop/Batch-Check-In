@@ -53,35 +53,48 @@ async function verifyMessageSignature({ message, signature, expectedAddress }) {
   try {
     ethers = require('ethers');
   } catch {
-    return signature === unsafeDevSignature(message, expectedAddress);
+    return {
+      valid: signature === unsafeDevSignature(message, expectedAddress),
+      method: 'unsafe_dev_signature',
+      walletType: 'unknown',
+      reason: 'ethers_not_installed'
+    };
   }
 
   const expected = String(expectedAddress).toLowerCase();
 
   try {
     const recoveredText = ethers.verifyMessage(message, signature);
-    if (recoveredText.toLowerCase() === expected) return true;
+    if (recoveredText.toLowerCase() === expected) {
+      return { valid: true, method: 'eoa_text', walletType: 'eoa' };
+    }
   } catch {}
 
   try {
     const messageHex = ethers.hexlify(ethers.toUtf8Bytes(message));
     const recoveredBytes = ethers.verifyMessage(ethers.getBytes(messageHex), signature);
-    if (recoveredBytes.toLowerCase() === expected) return true;
+    if (recoveredBytes.toLowerCase() === expected) {
+      return { valid: true, method: 'eoa_hex_bytes', walletType: 'eoa' };
+    }
   } catch {}
 
   // Some providers sign the literal hex string as plain text.
   try {
     const messageHexLiteral = ethers.hexlify(ethers.toUtf8Bytes(message));
     const recoveredHexLiteral = ethers.verifyMessage(messageHexLiteral, signature);
-    if (recoveredHexLiteral.toLowerCase() === expected) return true;
+    if (recoveredHexLiteral.toLowerCase() === expected) {
+      return { valid: true, method: 'eoa_hex_literal', walletType: 'eoa' };
+    }
   } catch {}
 
   try {
     const is1271Valid = await verifyErc1271(ethers, expectedAddress, message, signature);
-    if (is1271Valid) return true;
+    if (is1271Valid) {
+      return { valid: true, method: 'erc1271', walletType: 'contract' };
+    }
   } catch {}
 
-  return false;
+  return { valid: false, method: 'none', walletType: 'unknown', reason: 'no_verification_path_matched' };
 }
 
 module.exports = {

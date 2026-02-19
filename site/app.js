@@ -136,15 +136,21 @@ async function runBatchCheckin(count) {
   setActionButtonsDisabled(true);
 
   try {
+    const requestId = createRequestId();
     if (state.sessionToken) {
       const fast = await api('/api/checkin/execute', {
         method: 'POST',
         body: JSON.stringify({
           sessionToken: state.sessionToken,
-          count
+          count,
+          requestId
         })
       });
       state.profile = fast.profile;
+      if (fast.sessionToken) {
+        state.sessionToken = fast.sessionToken;
+        localStorage.setItem(SESSION_TOKEN_KEY, fast.sessionToken);
+      }
       renderState();
       log(`Applied ${fast.applied} check-ins via session (no new signature).`);
       return;
@@ -168,7 +174,7 @@ async function runBatchCheckin(count) {
 
     const executePayload = await api('/api/checkin/execute', {
       method: 'POST',
-      body: JSON.stringify({ challengeToken, signature })
+      body: JSON.stringify({ challengeToken, signature, requestId })
     });
 
     state.profile = executePayload.profile;
@@ -272,6 +278,13 @@ function utf8ToHex(value) {
   let hex = '0x';
   for (const b of bytes) hex += b.toString(16).padStart(2, '0');
   return hex;
+}
+
+function createRequestId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID().replaceAll('-', '');
+  }
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function log(message) {

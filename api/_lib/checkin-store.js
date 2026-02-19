@@ -3,15 +3,15 @@ const db = require('./state');
 
 const memory = {
   profiles: new Map(),
-  challenges: new Map()
+  idempotency: new Map()
 };
 
 function profileKey(playerId) {
   return `checkin:profile:${playerId}`;
 }
 
-function challengeKey(nonce) {
-  return `checkin:challenge:${nonce}`;
+function idempotencyKey(playerId, requestId) {
+  return `checkin:idempotency:${playerId}:${requestId}`;
 }
 
 function nowIso() {
@@ -56,41 +56,35 @@ async function applyCheckins(playerId, count) {
   return saveProfile(current);
 }
 
-async function saveChallenge(challenge) {
+async function getIdempotentResult(playerId, requestId) {
+  if (!requestId) return null;
   const redis = await db.getRedisClient();
   if (redis) {
-    const ttlMs = Math.max(1, new Date(challenge.expiresAt).getTime() - Date.now());
-    await redis.set(challengeKey(challenge.nonce), JSON.stringify(challenge), { PX: ttlMs });
-    return;
-  }
-
-  memory.challenges.set(challenge.nonce, challenge);
-}
-
-async function getChallenge(nonce) {
-  const redis = await db.getRedisClient();
-  if (redis) {
-    const raw = await redis.get(challengeKey(nonce));
+    const raw = await redis.get(idempotencyKey(playerId, requestId));
     return raw ? JSON.parse(raw) : null;
   }
 
-  const challenge = memory.challenges.get(nonce) || null;
-  if (!challenge) return null;
-  if (new Date(challenge.expiresAt).getTime() < Date.now()) {
-    memory.challenges.delete(nonce);
+  const item = memory.idempotency.get(idempotencyKey(playerId, requestId)) || null;
+  if (!item) return null;
+  if (item.expiresAtMs < Date.now()) {
+    memory.idempotency.delete(idempotencyKey(playerId, requestId));
     return null;
   }
-  return challenge;
+  return item.payload;
 }
 
-async function consumeChallenge(nonce) {
+async function saveIdempotentResult(playerId, requestId, payload, ttlMs = 15 * 60 * 1000) {
+  if (!requestId) return;
   const redis = await db.getRedisClient();
   if (redis) {
-    await redis.del(challengeKey(nonce));
+    await redis.set(idempotencyKey(playerId, requestId), JSON.stringify(payload), { PX: ttlMs });
     return;
   }
 
-  memory.challenges.delete(nonce);
+  memory.idempotency.set(idempotencyKey(playerId, requestId), {
+    payload,
+    expiresAtMs: Date.now() + ttlMs
+  });
 }
 
 function createChallenge({ playerId, address, count }) {
@@ -112,9 +106,8 @@ function createChallenge({ playerId, address, count }) {
 
 module.exports = {
   applyCheckins,
-  consumeChallenge,
   createChallenge,
-  getChallenge,
+  getIdempotentResult,
   getProfile,
-  saveChallenge
+  saveIdempotentResult
 };

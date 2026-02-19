@@ -19,10 +19,11 @@ function signPayload(payload) {
     .digest('base64url');
 }
 
-function createSessionToken({ playerId, address, ttlSeconds = 7 * 24 * 60 * 60 }) {
+function createSessionToken({ playerId, address, ttlSeconds = 30 * 60 }) {
   const payload = {
     playerId,
     address: String(address).toLowerCase(),
+    sid: crypto.randomUUID().replaceAll('-', ''),
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + ttlSeconds
   };
@@ -48,6 +49,7 @@ function verifySessionToken(token, expectedPlayerId) {
   }
 
   if (!payload || payload.playerId !== expectedPlayerId) return null;
+  if (!payload.sid || typeof payload.sid !== 'string') return null;
   if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
 
   return payload;
