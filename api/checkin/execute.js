@@ -1,7 +1,11 @@
 const { badRequest, getPlayerId, json, methodGuard, readBody } = require('../_lib/http');
 const store = require('../_lib/checkin-store');
 const { verifyMessageSignature } = require('../_lib/signature');
-const { createSessionToken, verifySessionToken } = require('../_lib/session-token');
+const {
+  createSessionToken,
+  verifyChallengeToken,
+  verifySessionToken
+} = require('../_lib/session-token');
 
 const ALLOWED_COUNTS = new Set([1, 10, 100]);
 
@@ -29,27 +33,21 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  const nonce = String(body.nonce || '').trim();
+  const challengeToken = String(body.challengeToken || '').trim();
+  if (!challengeToken) return badRequest(res, 'challengeToken is required');
+
+  const challengePayload = verifyChallengeToken(challengeToken, playerId);
+  if (!challengePayload) return badRequest(res, 'Challenge token invalid or expired');
+
   const signature = String(body.signature || '').trim();
-  if (!nonce) return badRequest(res, 'nonce is required');
   if (!signature) return badRequest(res, 'signature is required');
-
-  const challenge = await store.getChallenge(nonce);
-  if (!challenge) return badRequest(res, 'Challenge not found or expired');
-  if (challenge.playerId !== playerId) return badRequest(res, 'Challenge owner mismatch');
-  if (!ALLOWED_COUNTS.has(challenge.count)) return badRequest(res, 'Invalid challenge count');
-
-  if (new Date(challenge.expiresAt).getTime() < Date.now()) {
-    await store.consumeChallenge(challenge.nonce);
-    return badRequest(res, 'Challenge expired');
-  }
 
   let valid = false;
   try {
     valid = await verifyMessageSignature({
-      message: challenge.message,
+      message: challengePayload.message,
       signature,
-      expectedAddress: challenge.address
+      expectedAddress: challengePayload.address
     });
   } catch (error) {
     return badRequest(res, error.message);
@@ -57,16 +55,15 @@ module.exports = async function handler(req, res) {
 
   if (!valid) return badRequest(res, 'Invalid signature');
 
-  await store.consumeChallenge(challenge.nonce);
-  const profile = await store.applyCheckins(playerId, challenge.count);
+  const profile = await store.applyCheckins(playerId, challengePayload.count);
   const nextSessionToken = createSessionToken({
     playerId,
-    address: challenge.address
+    address: challengePayload.address
   });
 
   json(res, 200, {
     ok: true,
-    applied: challenge.count,
+    applied: challengePayload.count,
     profile,
     sessionToken: nextSessionToken
   });

@@ -53,7 +53,47 @@ function verifySessionToken(token, expectedPlayerId) {
   return payload;
 }
 
+function createChallengeToken(challenge) {
+  const payload = {
+    playerId: challenge.playerId,
+    address: String(challenge.address).toLowerCase(),
+    count: challenge.count,
+    nonce: challenge.nonce,
+    exp: Math.floor(new Date(challenge.expiresAt).getTime() / 1000),
+    message: challenge.message
+  };
+  const encodedPayload = base64url(JSON.stringify(payload));
+  const signature = signPayload(encodedPayload);
+  return `${encodedPayload}.${signature}`;
+}
+
+function verifyChallengeToken(token, expectedPlayerId) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  const [encodedPayload, signature] = token.split('.');
+  if (!encodedPayload || !signature) return null;
+
+  const expectedSig = signPayload(encodedPayload);
+  if (signature !== expectedSig) return null;
+
+  let payload;
+  try {
+    payload = parseBase64urlJson(encodedPayload);
+  } catch {
+    return null;
+  }
+
+  if (!payload || payload.playerId !== expectedPlayerId) return null;
+  if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+  if (![1, 10, 100].includes(Number(payload.count))) return null;
+  if (!/^0x[a-fA-F0-9]{40}$/.test(String(payload.address))) return null;
+  if (typeof payload.message !== 'string' || !payload.message.length) return null;
+
+  return payload;
+}
+
 module.exports = {
   createSessionToken,
+  createChallengeToken,
+  verifyChallengeToken,
   verifySessionToken
 };

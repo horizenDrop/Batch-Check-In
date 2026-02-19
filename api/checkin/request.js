@@ -1,5 +1,6 @@
 const { badRequest, getPlayerId, json, methodGuard, readBody } = require('../_lib/http');
 const store = require('../_lib/checkin-store');
+const { createChallengeToken } = require('../_lib/session-token');
 
 const ALLOWED_COUNTS = new Set([1, 10, 100]);
 
@@ -17,11 +18,12 @@ module.exports = async function handler(req, res) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return badRequest(res, 'Valid wallet address is required');
 
   const challenge = store.createChallenge({ playerId, address, count });
-  await store.saveChallenge(challenge);
+  const challengeToken = createChallengeToken(challenge);
 
   json(res, 200, {
     ok: true,
     challenge: {
+      challengeToken,
       nonce: challenge.nonce,
       message: challenge.message,
       expiresAt: challenge.expiresAt,

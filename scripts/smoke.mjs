@@ -50,14 +50,14 @@ async function main() {
   });
   assertOk(requested, 'checkin/request');
 
-  const { message, nonce } = requested.payload.challenge;
+  const { message, challengeToken } = requested.payload.challenge;
   const signature = unsafeDevSignature(message, address);
 
   const executed = await call(checkinExecute, {
     method: 'POST',
     headers,
     body: {
-      nonce,
+      challengeToken,
       signature
     }
   });

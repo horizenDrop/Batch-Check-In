@@ -153,14 +153,14 @@ async function runBatchCheckin(count) {
     });
 
     const message = requestPayload.challenge.message;
-    const nonce = requestPayload.challenge.nonce;
+    const challengeToken = requestPayload.challenge.challengeToken;
     log(`Challenge prepared for ${count} check-ins`);
 
     const signature = await signMessageWithFallback(message, state.address);
 
     const executePayload = await api('/api/checkin/execute', {
       method: 'POST',
-      body: JSON.stringify({ nonce, signature })
+      body: JSON.stringify({ challengeToken, signature })
     });
 
     state.profile = executePayload.profile;
