@@ -1,10 +1,12 @@
 const playerId = ensurePlayerId();
 const CONNECTED_FLAG_KEY = 'batch_checkin_wallet_connected';
 const LAST_ADDRESS_KEY = 'batch_checkin_last_address';
+const SESSION_TOKEN_KEY = 'batch_checkin_session_token';
 const state = {
   address: null,
   profile: null,
-  busy: false
+  busy: false,
+  sessionToken: localStorage.getItem(SESSION_TOKEN_KEY) || null
 };
 
 const el = {
@@ -126,6 +128,20 @@ async function runBatchCheckin(count) {
   setActionButtonsDisabled(true);
 
   try {
+    if (state.sessionToken) {
+      const fast = await api('/api/checkin/execute', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionToken: state.sessionToken,
+          count
+        })
+      });
+      state.profile = fast.profile;
+      renderState();
+      log(`Applied ${fast.applied} check-ins via session (no new signature).`);
+      return;
+    }
+
     if (!state.address) {
       await connectWalletInternal({ allowPrompt: true, source: 'action' });
       if (!state.address) throw new Error('Connect wallet first');
@@ -148,9 +164,17 @@ async function runBatchCheckin(count) {
     });
 
     state.profile = executePayload.profile;
+    if (executePayload.sessionToken) {
+      state.sessionToken = executePayload.sessionToken;
+      localStorage.setItem(SESSION_TOKEN_KEY, executePayload.sessionToken);
+    }
     renderState();
-    log(`Success: applied ${executePayload.applied} check-ins with one signature`);
+    log(`Success: applied ${executePayload.applied} check-ins. Session enabled for next actions.`);
   } catch (error) {
+    if (String(error.message).toLowerCase().includes('session invalid')) {
+      clearSessionToken();
+      log('Session expired. Please sign once again.');
+    }
     log(`Batch check-in failed: ${error.message}`);
   } finally {
     state.busy = false;
@@ -193,6 +217,7 @@ function renderState() {
   el.stateBox.innerHTML = `
     <div><b>Player ID:</b> ${playerId}</div>
     <div><b>Wallet:</b> ${state.address ? short(state.address) : 'not connected'}</div>
+    <div><b>Session:</b> ${state.sessionToken ? 'active' : 'signature required'}</div>
     <div><b>Total Check-Ins:</b> ${profile.totalCheckins}</div>
     <div><b>Signed Actions:</b> ${profile.actions}</div>
   `;
@@ -215,6 +240,7 @@ function onDisconnect() {
   state.address = null;
   localStorage.removeItem(CONNECTED_FLAG_KEY);
   localStorage.removeItem(LAST_ADDRESS_KEY);
+  clearSessionToken();
   el.connectBtn.textContent = 'Connect Wallet';
   renderState();
 }
@@ -222,6 +248,11 @@ function onDisconnect() {
 function isBaseAppContext() {
   const ua = String(navigator.userAgent || '').toLowerCase();
   return ua.includes('base') || ua.includes('farcaster');
+}
+
+function clearSessionToken() {
+  state.sessionToken = null;
+  localStorage.removeItem(SESSION_TOKEN_KEY);
 }
 
 function short(value) {

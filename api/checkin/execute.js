@@ -1,6 +1,7 @@
 const { badRequest, getPlayerId, json, methodGuard, readBody } = require('../_lib/http');
 const store = require('../_lib/checkin-store');
 const { verifyMessageSignature } = require('../_lib/signature');
+const { createSessionToken, verifySessionToken } = require('../_lib/session-token');
 
 const ALLOWED_COUNTS = new Set([1, 10, 100]);
 
@@ -10,6 +11,23 @@ module.exports = async function handler(req, res) {
   const body = await readBody(req);
   const playerId = getPlayerId(req, body);
   if (!playerId) return badRequest(res, 'playerId is required');
+
+  const sessionToken = String(body.sessionToken || '').trim();
+  if (sessionToken) {
+    const session = verifySessionToken(sessionToken, playerId);
+    if (!session) return badRequest(res, 'Session invalid or expired');
+
+    const count = Number(body.count);
+    if (!ALLOWED_COUNTS.has(count)) return badRequest(res, 'count must be 1, 10, or 100');
+
+    const profile = await store.applyCheckins(playerId, count);
+    return json(res, 200, {
+      ok: true,
+      applied: count,
+      profile,
+      sessionToken
+    });
+  }
 
   const nonce = String(body.nonce || '').trim();
   const signature = String(body.signature || '').trim();
@@ -41,10 +59,15 @@ module.exports = async function handler(req, res) {
 
   await store.consumeChallenge(challenge.nonce);
   const profile = await store.applyCheckins(playerId, challenge.count);
+  const nextSessionToken = createSessionToken({
+    playerId,
+    address: challenge.address
+  });
 
   json(res, 200, {
     ok: true,
     applied: challenge.count,
-    profile
+    profile,
+    sessionToken: nextSessionToken
   });
 };

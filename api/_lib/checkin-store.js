@@ -97,15 +97,7 @@ function createChallenge({ playerId, address, count }) {
   const nonce = crypto.randomUUID().replaceAll('-', '');
   const issuedAt = nowIso();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-  const message = [
-    'Batch Check-In Authorization',
-    `playerId:${playerId}`,
-    `address:${address}`,
-    `count:${count}`,
-    `nonce:${nonce}`,
-    `issuedAt:${issuedAt}`,
-    `expiresAt:${expiresAt}`
-  ].join('\n');
+  const message = `BatchCheckIn|player:${playerId}|addr:${address}|count:${count}|nonce:${nonce}|exp:${expiresAt}`;
 
   return {
     nonce,

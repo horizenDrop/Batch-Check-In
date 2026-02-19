@@ -65,9 +65,28 @@ async function main() {
   if (executed.payload.applied !== 10) {
     throw new Error('applied checkins should be 10');
   }
+  if (!executed.payload.sessionToken) {
+    throw new Error('session token should be returned after signed execution');
+  }
+
+  const sessionExecuted = await call(checkinExecute, {
+    method: 'POST',
+    headers,
+    body: {
+      sessionToken: executed.payload.sessionToken,
+      count: 100
+    }
+  });
+  assertOk(sessionExecuted, 'checkin/execute session');
+  if (sessionExecuted.payload.applied !== 100) {
+    throw new Error('session applied checkins should be 100');
+  }
 
   const after = await call(checkinState, { headers });
   assertOk(after, 'checkin/state after');
+  if (after.payload.profile.totalCheckins !== 110) {
+    throw new Error('totalCheckins should be 110 after signed+session executes');
+  }
 
   console.log(
     JSON.stringify(
