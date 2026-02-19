@@ -1,4 +1,6 @@
 const playerId = ensurePlayerId();
+const CONNECTED_FLAG_KEY = 'batch_checkin_wallet_connected';
+const LAST_ADDRESS_KEY = 'batch_checkin_last_address';
 const state = {
   address: null,
   profile: null,
@@ -16,6 +18,7 @@ init();
 
 function init() {
   bindEvents();
+  autoConnectWallet();
   refreshState();
 }
 
@@ -25,6 +28,11 @@ function bindEvents() {
 
   for (const button of document.querySelectorAll('button[data-count]')) {
     button.addEventListener('click', () => runBatchCheckin(Number(button.dataset.count)));
+  }
+
+  if (window.ethereum && typeof window.ethereum.on === 'function') {
+    window.ethereum.on('accountsChanged', onAccountsChanged);
+    window.ethereum.on('disconnect', onDisconnect);
   }
 }
 
@@ -55,18 +63,50 @@ async function api(path, options = {}) {
 }
 
 async function connectWallet() {
+  return connectWalletInternal({ allowPrompt: true, source: 'manual' });
+}
+
+async function autoConnectWallet() {
+  try {
+    await connectWalletInternal({ allowPrompt: false, source: 'auto' });
+    if (state.address) return;
+
+    const connectedBefore = localStorage.getItem(CONNECTED_FLAG_KEY) === '1';
+    if (connectedBefore || isBaseAppContext()) {
+      await connectWalletInternal({ allowPrompt: true, source: 'auto-restore' });
+    }
+  } catch {
+    // Silent by design for auto-connect attempts.
+  }
+}
+
+async function connectWalletInternal({ allowPrompt, source }) {
   try {
     if (!window.ethereum) {
       throw new Error('No EVM wallet found in webview/browser');
     }
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+    let accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    if ((!accounts || !accounts.length) && allowPrompt) {
+      accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    }
+
     const address = (accounts && accounts[0]) || null;
-    if (!address) throw new Error('Wallet account not available');
+    if (!address) {
+      if (allowPrompt) throw new Error('Wallet account not available');
+      return null;
+    }
+
     state.address = address;
+    localStorage.setItem(CONNECTED_FLAG_KEY, '1');
+    localStorage.setItem(LAST_ADDRESS_KEY, address);
+    el.connectBtn.textContent = 'Wallet Connected';
     renderState();
-    log(`Wallet connected: ${short(state.address)}`);
+    log(`Wallet connected (${source}): ${short(state.address)}`);
+    return address;
   } catch (error) {
-    log(`Connect failed: ${error.message}`);
+    if (allowPrompt) log(`Connect failed: ${error.message}`);
+    return null;
   }
 }
 
@@ -87,7 +127,7 @@ async function runBatchCheckin(count) {
 
   try {
     if (!state.address) {
-      await connectWallet();
+      await connectWalletInternal({ allowPrompt: true, source: 'action' });
       if (!state.address) throw new Error('Connect wallet first');
     }
 
@@ -132,10 +172,37 @@ function renderState() {
   el.stateBox.innerHTML = `
     <div><b>Player ID:</b> ${playerId}</div>
     <div><b>Wallet:</b> ${state.address ? short(state.address) : 'not connected'}</div>
+    <div><b>Remembered:</b> ${localStorage.getItem(CONNECTED_FLAG_KEY) === '1' ? 'yes' : 'no'}</div>
     <div><b>Total Check-Ins:</b> ${profile.totalCheckins}</div>
     <div><b>Signed Actions:</b> ${profile.actions}</div>
     <div><b>Updated:</b> ${profile.updatedAt || '-'}</div>
   `;
+}
+
+function onAccountsChanged(accounts) {
+  const address = (accounts && accounts[0]) || null;
+  if (!address) {
+    onDisconnect();
+    return;
+  }
+  state.address = address;
+  localStorage.setItem(CONNECTED_FLAG_KEY, '1');
+  localStorage.setItem(LAST_ADDRESS_KEY, address);
+  el.connectBtn.textContent = 'Wallet Connected';
+  renderState();
+}
+
+function onDisconnect() {
+  state.address = null;
+  localStorage.removeItem(CONNECTED_FLAG_KEY);
+  localStorage.removeItem(LAST_ADDRESS_KEY);
+  el.connectBtn.textContent = 'Connect Wallet';
+  renderState();
+}
+
+function isBaseAppContext() {
+  const ua = String(navigator.userAgent || '').toLowerCase();
+  return ua.includes('base') || ua.includes('farcaster');
 }
 
 function short(value) {
