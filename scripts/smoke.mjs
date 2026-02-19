@@ -1,11 +1,7 @@
-import runStart from '../api/run/start.js';
-import runChoice from '../api/run/choice.js';
-import runFinish from '../api/run/finish.js';
-import builds from '../api/builds.js';
-import arenaEnter from '../api/arena/enter.js';
-import arenaState from '../api/arena/state.js';
-import leaderboard from '../api/leaderboard.js';
-import player from '../api/player.js';
+import checkinState from '../api/checkin/state.js';
+import checkinRequest from '../api/checkin/request.js';
+import checkinExecute from '../api/checkin/execute.js';
+import { unsafeDevSignature } from '../api/_lib/signature.js';
 
 function call(handler, { method = 'GET', body = {}, query = {}, headers = {} } = {}) {
   return new Promise((resolve) => {
@@ -36,47 +32,50 @@ function assertOk(result, label) {
 
 async function main() {
   const headers = { 'x-player-id': `smoke_${Date.now()}` };
+  const address = '0x1111111111111111111111111111111111111111';
 
-  const started = await call(runStart, { method: 'POST', body: {}, headers });
-  assertOk(started, 'run/start');
-
-  for (let i = 0; i < 10; i += 1) {
-    const picked = await call(runChoice, { method: 'POST', body: { choiceIndex: i % 3 }, headers });
-    assertOk(picked, 'run/choice');
-    if (picked.payload.run.status !== 'active') break;
+  const before = await call(checkinState, { headers });
+  assertOk(before, 'checkin/state before');
+  if (before.payload.profile.totalCheckins !== 0) {
+    throw new Error('initial totalCheckins should be 0');
   }
 
-  const finished = await call(runFinish, { method: 'POST', body: { slotIndex: 0 }, headers });
-  assertOk(finished, 'run/finish');
-  const buildId = finished.payload.build.buildId;
-
-  const entered = await call(arenaEnter, {
+  const requested = await call(checkinRequest, {
     method: 'POST',
-    body: { buildId, arenaType: 'small' },
-    headers
+    headers,
+    body: {
+      address,
+      count: 10
+    }
   });
-  assertOk(entered, 'arena/enter');
+  assertOk(requested, 'checkin/request');
 
-  const playerState = await call(player, { headers });
-  assertOk(playerState, 'player');
+  const { message, nonce } = requested.payload.challenge;
+  const signature = unsafeDevSignature(message, address);
 
-  const buildState = await call(builds, { headers });
-  assertOk(buildState, 'builds');
+  const executed = await call(checkinExecute, {
+    method: 'POST',
+    headers,
+    body: {
+      nonce,
+      signature
+    }
+  });
+  assertOk(executed, 'checkin/execute');
+  if (executed.payload.applied !== 10) {
+    throw new Error('applied checkins should be 10');
+  }
 
-  const arena = await call(arenaState, { headers, query: { type: 'small' } });
-  assertOk(arena, 'arena/state');
-
-  const board = await call(leaderboard, { query: { type: 'small' } });
-  assertOk(board, 'leaderboard');
+  const after = await call(checkinState, { headers });
+  assertOk(after, 'checkin/state after');
 
   console.log(
     JSON.stringify(
       {
         ok: true,
         playerId: headers['x-player-id'],
-        builds: buildState.payload.builds.length,
-        arenaEntries: arena.payload.myEntries.length,
-        coins: playerState.payload.player.currency_soft
+        totalCheckins: after.payload.profile.totalCheckins,
+        actions: after.payload.profile.actions
       },
       null,
       2

@@ -3,107 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Build & Arena</title>
-  <meta name="description" content="Tower defense run into timed arenas." />
+  <title>Batch Check-In</title>
+  <meta name="description" content="One signature, 1/10/100 check-ins." />
   <meta name="base:app_id" content="69974cb8654fdd1228819c73" />
   <meta property="fc:frame" content="__FC_FRAME__" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <main class="app">
-    <header class="top">
-      <h1>BUILD & ARENA</h1>
-      <p class="subtitle">Tower Defense Run -> Build Slot -> Arena</p>
-      <div id="playerBar" class="player-bar"></div>
-    </header>
-
-    <nav class="nav" id="nav">
-      <button class="nav-btn active" data-screen="play">Play</button>
-      <button class="nav-btn" data-screen="builds">Builds</button>
-      <button class="nav-btn" data-screen="arena">Arena</button>
-    </nav>
-
-    <section class="screen active" id="screen-play">
-      <article class="card">
-        <div class="row">
-          <h2>Battlefield</h2>
-          <button id="startRunBtn">Start Run</button>
-        </div>
-        <canvas id="battlefield" width="360" height="200"></canvas>
-        <div id="battleStats" class="stats"></div>
-        <p id="objective" class="objective">Press Start Run. Then pick a card and survive all 10 waves.</p>
-      </article>
-
-      <article class="card">
-        <h2>Tower Controls</h2>
-        <div class="tower-pick row">
-          <button data-tower="arrow" class="tower-btn active">Arrow (20)</button>
-          <button data-tower="cannon" class="tower-btn">Cannon (30)</button>
-          <button data-tower="frost" class="tower-btn">Frost (25)</button>
-        </div>
-        <div class="row">
-          <button id="buildLeftBtn">Build Left</button>
-          <button id="buildMidBtn">Build Mid</button>
-          <button id="buildRightBtn">Build Right</button>
-        </div>
-        <small>Towers can be built once per slot. Earn gold from kills.</small>
-      </article>
-
-      <article class="card">
-        <div class="row">
-          <h2>Upgrade Cards</h2>
-          <label>Save slot
-            <input id="slotInput" type="number" min="0" max="9" value="0" />
-          </label>
-          <button id="finishRunBtn">Finish & Save Build</button>
-        </div>
-        <div id="choices" class="choices"></div>
-      </article>
+    <section class="card top">
+      <h1>Batch Check-In</h1>
+      <p>Choose amount: 1, 10, or 100. Sign once, execute selected batch under the hood.</p>
     </section>
 
-    <section class="screen" id="screen-builds">
-      <article class="card">
-        <div class="row">
-          <h2>Build Slots</h2>
-          <button id="refreshBuildsBtn">Refresh</button>
-        </div>
-        <div id="builds" class="choices"></div>
-      </article>
+    <section class="card">
+      <div class="row">
+        <button id="connectBtn">Connect Wallet</button>
+        <button id="refreshBtn">Refresh State</button>
+      </div>
+      <div id="stateBox" class="state-box"></div>
     </section>
 
-    <section class="screen" id="screen-arena">
-      <article class="card">
-        <div class="row">
-          <h2>Arena</h2>
-          <label>
-            Type
-            <select id="arenaType">
-              <option value="small">Small (15m)</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-            </select>
-          </label>
-          <button id="refreshArenaBtn">Refresh</button>
-          <button id="refreshBoardBtn">Leaderboard</button>
-        </div>
-        <pre id="arenaState" class="mono"></pre>
-      </article>
-
-      <article class="card">
-        <h2>Enter Arena</h2>
-        <div id="arenaBuilds" class="choices"></div>
-      </article>
-
-      <article class="card">
-        <h2>Leaderboard</h2>
-        <div id="leaderboard" class="leaderboard"></div>
-      </article>
+    <section class="card">
+      <h2>Check-In Actions</h2>
+      <div class="actions">
+        <button data-count="1" class="action-btn">1 Check-In</button>
+        <button data-count="10" class="action-btn">10 Check-Ins</button>
+        <button data-count="100" class="action-btn">100 Check-Ins</button>
+      </div>
+      <p class="hint">Each button asks for one signature only, then backend applies selected count.</p>
     </section>
 
-    <article class="card">
-      <h2>Event Feed</h2>
-      <pre id="log" class="mono log"></pre>
-    </article>
+    <section class="card">
+      <h2>Log</h2>
+      <pre id="log" class="log"></pre>
+    </section>
   </main>
   <script type="module" src="/app.js"></script>
 </body>
