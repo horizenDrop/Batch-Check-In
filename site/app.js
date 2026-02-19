@@ -34,6 +34,7 @@ init();
 
 function init() {
   bindEvents();
+  window.addEventListener('resize', renderPlayerBar);
   hydrate();
 }
 
@@ -220,6 +221,16 @@ async function refreshLeaderboard() {
 function renderPlayerBar() {
   if (!state.player) {
     el.playerBar.textContent = `ID: ${playerId}`;
+    return;
+  }
+
+  const mobile = window.matchMedia('(max-width: 620px)').matches;
+  if (mobile) {
+    el.playerBar.textContent = [
+      `ID ${playerId}`,
+      `Coins ${state.player.currency_soft} | Cups ${state.player.cups}`,
+      `MMR ${state.player.mmr_small}/${state.player.mmr_daily}/${state.player.mmr_weekly}`
+    ].join('\n');
     return;
   }
 
