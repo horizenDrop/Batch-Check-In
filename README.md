@@ -16,6 +16,10 @@ Each action uses:
 - `POST /api/checkin/execute`
 - `GET /api/health`
 
+## Base Mainnet Signature Verification
+- Supports EOA signatures and ERC-1271 smart wallet signatures.
+- Uses `BASE_RPC_URL` (default `https://mainnet.base.org`) to validate contract-wallet signatures.
+
 ## Local Build
 ```bash
 npm run build

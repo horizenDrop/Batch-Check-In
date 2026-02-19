@@ -8,6 +8,46 @@ function unsafeDevSignature(message, expectedAddress) {
   return `unsafe:${digest}`;
 }
 
+let cachedProvider = null;
+
+async function getBaseProvider(ethers) {
+  if (cachedProvider) return cachedProvider;
+  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+  cachedProvider = new ethers.JsonRpcProvider(rpcUrl, 8453);
+  return cachedProvider;
+}
+
+async function verifyErc1271(ethers, expectedAddress, message, signature) {
+  const provider = await getBaseProvider(ethers);
+  const code = await provider.getCode(expectedAddress);
+  if (!code || code === '0x') return false;
+
+  const contract = new ethers.Contract(
+    expectedAddress,
+    [
+      'function isValidSignature(bytes32 _hash, bytes _signature) view returns (bytes4)',
+      'function isValidSignature(bytes _data, bytes _signature) view returns (bytes4)'
+    ],
+    provider
+  );
+
+  const MAGIC_VALUE = '0x1626ba7e';
+  const hash = ethers.hashMessage(message);
+
+  try {
+    const resultHash = await contract['isValidSignature(bytes32,bytes)'](hash, signature);
+    if (String(resultHash).toLowerCase() === MAGIC_VALUE) return true;
+  } catch {}
+
+  try {
+    const bytesData = ethers.toUtf8Bytes(message);
+    const resultBytes = await contract['isValidSignature(bytes,bytes)'](bytesData, signature);
+    if (String(resultBytes).toLowerCase() === MAGIC_VALUE) return true;
+  } catch {}
+
+  return false;
+}
+
 async function verifyMessageSignature({ message, signature, expectedAddress }) {
   let ethers;
   try {
@@ -34,6 +74,11 @@ async function verifyMessageSignature({ message, signature, expectedAddress }) {
     const messageHexLiteral = ethers.hexlify(ethers.toUtf8Bytes(message));
     const recoveredHexLiteral = ethers.verifyMessage(messageHexLiteral, signature);
     if (recoveredHexLiteral.toLowerCase() === expected) return true;
+  } catch {}
+
+  try {
+    const is1271Valid = await verifyErc1271(ethers, expectedAddress, message, signature);
+    if (is1271Valid) return true;
   } catch {}
 
   return false;
