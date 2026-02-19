@@ -29,6 +29,13 @@ async function verifyMessageSignature({ message, signature, expectedAddress }) {
     if (recoveredBytes.toLowerCase() === expected) return true;
   } catch {}
 
+  // Some providers sign the literal hex string as plain text.
+  try {
+    const messageHexLiteral = ethers.hexlify(ethers.toUtf8Bytes(message));
+    const recoveredHexLiteral = ethers.verifyMessage(messageHexLiteral, signature);
+    if (recoveredHexLiteral.toLowerCase() === expected) return true;
+  } catch {}
+
   return false;
 }
 

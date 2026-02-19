@@ -194,8 +194,8 @@ async function signMessageWithFallback(message, address) {
   const messageHex = utf8ToHex(message);
   const attempts = [
     [message, address],
-    [messageHex, address],
     [address, message],
+    [messageHex, address],
     [address, messageHex]
   ];
 
