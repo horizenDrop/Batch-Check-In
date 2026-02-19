@@ -4,130 +4,106 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Build & Arena</title>
-  <meta name="description" content="Roguelike PvE into timed PvP arenas." />
+  <meta name="description" content="Tower defense run into timed arenas." />
   <meta name="base:app_id" content="69974cb8654fdd1228819c73" />
   <meta property="fc:frame" content="__FC_FRAME__" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <main class="game-shell">
-    <header class="hud">
-      <div class="brand">
-        <h1>BUILD & ARENA</h1>
-        <p>Retro Card Auto-Battler</p>
-      </div>
-      <div id="playerBar" class="player-bar mono"></div>
+  <main class="app">
+    <header class="top">
+      <h1>BUILD & ARENA</h1>
+      <p class="subtitle">Tower Defense Run -> Build Slot -> Arena</p>
+      <div id="playerBar" class="player-bar"></div>
     </header>
 
-    <nav class="tabs" id="tabs">
-      <button data-view="menu" class="tab active">Menu</button>
-      <button data-view="run" class="tab">Run</button>
-      <button data-view="builds" class="tab">Builds</button>
-      <button data-view="arena" class="tab">Arena</button>
-      <button data-view="leaderboard" class="tab">Leaderboard</button>
+    <nav class="nav" id="nav">
+      <button class="nav-btn active" data-screen="play">Play</button>
+      <button class="nav-btn" data-screen="builds">Builds</button>
+      <button class="nav-btn" data-screen="arena">Arena</button>
     </nav>
 
-    <section id="view-menu" class="view active">
-      <div class="panel">
-        <h2>Tavern Menu</h2>
-        <p class="lead">Build a deck in PvE, lock it into timed arenas, and climb leaderboard cycles.</p>
-        <div class="menu-grid">
-          <article class="menu-card">
-            <h3>1. Start Run</h3>
-            <p>10 rounds, each round pick 1 of 3 upgrade cards.</p>
-            <button id="menuStartRunBtn">Start New Run</button>
-          </article>
-          <article class="menu-card">
-            <h3>2. Save Build</h3>
-            <p>After run ends, save snapshot to one of 10 build slots.</p>
-            <button data-view-jump="run">Open Run Screen</button>
-          </article>
-          <article class="menu-card">
-            <h3>3. Enter Arena</h3>
-            <p>Send build to Small, Daily, or Weekly arena windows.</p>
-            <button data-view-jump="arena">Open Arena Screen</button>
-          </article>
+    <section class="screen active" id="screen-play">
+      <article class="card">
+        <div class="row">
+          <h2>Battlefield</h2>
+          <button id="startRunBtn">Start Run</button>
         </div>
-      </div>
-      <div class="panel">
-        <h2>How to Play</h2>
-        <ol class="guide">
-          <li>Press <b>Start New Run</b>.</li>
-          <li>Pick upgrade cards every round until run ends.</li>
-          <li>Save result to slot.</li>
-          <li>Open <b>Builds</b> and send one build to arena.</li>
-          <li>Wait for resolve timer and check ranks.</li>
-        </ol>
-      </div>
+        <canvas id="battlefield" width="360" height="200"></canvas>
+        <div id="battleStats" class="stats"></div>
+        <p id="objective" class="objective">Press Start Run. Then pick a card and survive all 10 waves.</p>
+      </article>
+
+      <article class="card">
+        <h2>Tower Controls</h2>
+        <div class="tower-pick row">
+          <button data-tower="arrow" class="tower-btn active">Arrow (20)</button>
+          <button data-tower="cannon" class="tower-btn">Cannon (30)</button>
+          <button data-tower="frost" class="tower-btn">Frost (25)</button>
+        </div>
+        <div class="row">
+          <button id="buildLeftBtn">Build Left</button>
+          <button id="buildMidBtn">Build Mid</button>
+          <button id="buildRightBtn">Build Right</button>
+        </div>
+        <small>Towers can be built once per slot. Earn gold from kills.</small>
+      </article>
+
+      <article class="card">
+        <div class="row">
+          <h2>Upgrade Cards</h2>
+          <label>Save slot
+            <input id="slotInput" type="number" min="0" max="9" value="0" />
+          </label>
+          <button id="finishRunBtn">Finish & Save Build</button>
+        </div>
+        <div id="choices" class="choices"></div>
+      </article>
     </section>
 
-    <section id="view-run" class="view">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>PvE Run</h2>
-          <div class="row">
-            <button id="startRunBtn">Start Run</button>
-            <label>Slot
-              <input id="slotInput" type="number" min="0" max="9" value="0" />
-            </label>
-            <button id="finishRunBtn">Finish & Save</button>
-          </div>
-        </div>
-        <div id="runSummary" class="run-summary"></div>
-      </div>
-      <div class="panel">
-        <h2>Choice Cards</h2>
-        <div id="choices" class="card-grid"></div>
-      </div>
-    </section>
-
-    <section id="view-builds" class="view">
-      <div class="panel">
-        <div class="panel-head">
+    <section class="screen" id="screen-builds">
+      <article class="card">
+        <div class="row">
           <h2>Build Slots</h2>
           <button id="refreshBuildsBtn">Refresh</button>
         </div>
-        <div id="builds" class="card-grid"></div>
-      </div>
+        <div id="builds" class="choices"></div>
+      </article>
     </section>
 
-    <section id="view-arena" class="view">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Timed Arena</h2>
-          <div class="row">
-            <label>Arena
-              <select id="arenaType">
-                <option value="small">Small (15m)</option>
-                <option value="daily">Daily (24h)</option>
-                <option value="weekly">Weekly (7d)</option>
-              </select>
-            </label>
-            <button id="refreshArenaBtn">Refresh Arena</button>
-          </div>
+    <section class="screen" id="screen-arena">
+      <article class="card">
+        <div class="row">
+          <h2>Arena</h2>
+          <label>
+            Type
+            <select id="arenaType">
+              <option value="small">Small (15m)</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </label>
+          <button id="refreshArenaBtn">Refresh</button>
+          <button id="refreshBoardBtn">Leaderboard</button>
         </div>
-        <div id="arenaState" class="mono"></div>
-      </div>
-      <div class="panel">
-        <h2>Ready Builds For Arena</h2>
-        <div id="arenaBuilds" class="card-grid"></div>
-      </div>
-    </section>
+        <pre id="arenaState" class="mono"></pre>
+      </article>
 
-    <section id="view-leaderboard" class="view">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Leaderboard</h2>
-          <button id="refreshBoardBtn">Refresh Board</button>
-        </div>
+      <article class="card">
+        <h2>Enter Arena</h2>
+        <div id="arenaBuilds" class="choices"></div>
+      </article>
+
+      <article class="card">
+        <h2>Leaderboard</h2>
         <div id="leaderboard" class="leaderboard"></div>
-      </div>
+      </article>
     </section>
 
-    <section class="panel">
-      <h2>Battle Log</h2>
-      <pre id="log" class="log mono"></pre>
-    </section>
+    <article class="card">
+      <h2>Event Feed</h2>
+      <pre id="log" class="mono log"></pre>
+    </article>
   </main>
   <script type="module" src="/app.js"></script>
 </body>
