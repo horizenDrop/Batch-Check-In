@@ -193,10 +193,8 @@ function renderState() {
   el.stateBox.innerHTML = `
     <div><b>Player ID:</b> ${playerId}</div>
     <div><b>Wallet:</b> ${state.address ? short(state.address) : 'not connected'}</div>
-    <div><b>Remembered:</b> ${localStorage.getItem(CONNECTED_FLAG_KEY) === '1' ? 'yes' : 'no'}</div>
     <div><b>Total Check-Ins:</b> ${profile.totalCheckins}</div>
     <div><b>Signed Actions:</b> ${profile.actions}</div>
-    <div><b>Updated:</b> ${profile.updatedAt || '-'}</div>
   `;
 }
 
