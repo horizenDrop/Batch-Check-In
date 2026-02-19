@@ -102,7 +102,7 @@ async function connectWalletInternal({ allowPrompt, source }) {
     state.address = address;
     localStorage.setItem(CONNECTED_FLAG_KEY, '1');
     localStorage.setItem(LAST_ADDRESS_KEY, address);
-    el.connectBtn.textContent = 'Wallet Connected';
+    el.connectBtn.textContent = short(address);
     renderState();
     log(`Wallet connected (${source}): ${short(state.address)}`);
     return address;
@@ -214,8 +214,8 @@ function setActionButtonsDisabled(disabled) {
 
 function renderState() {
   const profile = state.profile || { totalCheckins: 0, actions: 0, updatedAt: '-' };
+  el.connectBtn.textContent = state.address ? short(state.address) : 'Connect Wallet';
   el.stateBox.innerHTML = `
-    <div><b>Player ID:</b> ${playerId}</div>
     <div><b>Wallet:</b> ${state.address ? short(state.address) : 'not connected'}</div>
     <div><b>Session:</b> ${state.sessionToken ? 'active' : 'signature required'}</div>
     <div><b>Total Check-Ins:</b> ${profile.totalCheckins}</div>
@@ -232,7 +232,7 @@ function onAccountsChanged(accounts) {
   state.address = address;
   localStorage.setItem(CONNECTED_FLAG_KEY, '1');
   localStorage.setItem(LAST_ADDRESS_KEY, address);
-  el.connectBtn.textContent = 'Wallet Connected';
+  el.connectBtn.textContent = short(address);
   renderState();
 }
 
