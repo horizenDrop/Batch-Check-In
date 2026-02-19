@@ -98,7 +98,7 @@ function createChallenge({ playerId, address, count }) {
   const issuedAt = nowIso();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
   const message = [
-    'Build & Arena Check-In Authorization',
+    'Batch Check-In Authorization',
     `playerId:${playerId}`,
     `address:${address}`,
     `count:${count}`,

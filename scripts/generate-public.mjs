@@ -14,10 +14,10 @@ const frameObject = {
   version: "next",
   imageUrl: `${appUrl}/og.svg`,
   button: {
-    title: "Open Build & Arena",
+    title: "Open Batch Check-In",
     action: {
       type: "launch_frame",
-      name: "Build & Arena",
+      name: "Batch Check-In",
       url: appUrl,
       splashBackgroundColor: "#0b1220"
     }
@@ -29,7 +29,7 @@ const currentIndex = await readFile(indexPath, "utf8");
 const nextIndex = currentIndex.replace("__FC_FRAME__", escapeHtmlAttribute(JSON.stringify(frameObject)));
 await writeFile(indexPath, nextIndex, "utf8");
 
-await writeFile(resolve(publicDir, "og.svg"), `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#0b1220"/><text x="50%" y="50%" fill="#ffffff" font-size="72" text-anchor="middle" dominant-baseline="middle">Build & Arena</text></svg>`, "utf8");
+await writeFile(resolve(publicDir, "og.svg"), `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#0b1220"/><text x="50%" y="50%" fill="#ffffff" font-size="72" text-anchor="middle" dominant-baseline="middle">Batch Check-In</text></svg>`, "utf8");
 
 function escapeHtmlAttribute(value) {
   return value
