@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Build & Arena</title>
+  <meta name="description" content="Roguelike PvE into timed PvP arenas." />
+  <meta property="fc:frame" content="__FC_FRAME__" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <h1>Build & Arena</h1>
+      <p id="playerLabel"></p>
+    </header>
+
+    <section class="card">
+      <h2>Player</h2>
+      <div id="playerState" class="mono"></div>
+    </section>
+
+    <section class="card">
+      <h2>PvE Run</h2>
+      <div class="row">
+        <button id="startRunBtn">Start Run</button>
+        <label>
+          Slot:
+          <input id="slotInput" type="number" min="0" max="9" value="0" />
+        </label>
+      </div>
+      <div id="runState" class="mono"></div>
+      <div id="choices" class="choices"></div>
+      <div class="row">
+        <button id="finishRunBtn">Finish Run -> Save Build</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Builds</h2>
+      <div class="row">
+        <button id="refreshBuildsBtn">Refresh Builds</button>
+      </div>
+      <div id="builds"></div>
+    </section>
+
+    <section class="card">
+      <h2>Arena</h2>
+      <div class="row">
+        <label>
+          Type:
+          <select id="arenaType">
+            <option value="small">Small (15m)</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </label>
+        <button id="refreshArenaBtn">Refresh Arena State</button>
+      </div>
+      <div id="arenaState" class="mono"></div>
+    </section>
+
+    <section class="card">
+      <h2>Leaderboard</h2>
+      <button id="refreshBoardBtn">Refresh Leaderboard</button>
+      <div id="leaderboard"></div>
+    </section>
+
+    <section class="card" id="logCard">
+      <h2>Log</h2>
+      <pre id="log"></pre>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

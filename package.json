@@ -1,0 +1,12 @@
+﻿{
+  "name": "build-and-arena",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "node scripts/generate-public.mjs",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "redis": "^4.7.1"
+  }
+}
