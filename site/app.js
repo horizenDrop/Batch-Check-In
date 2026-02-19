@@ -6,12 +6,12 @@ const state = {
   address: null,
   profile: null,
   busy: false,
-  sessionToken: localStorage.getItem(SESSION_TOKEN_KEY) || null
+  sessionToken: localStorage.getItem(SESSION_TOKEN_KEY) || null,
+  refreshInFlight: false
 };
 
 const el = {
   connectBtn: document.getElementById('connectBtn'),
-  refreshBtn: document.getElementById('refreshBtn'),
   stateBox: document.getElementById('stateBox'),
   log: document.getElementById('log')
 };
@@ -22,11 +22,13 @@ function init() {
   bindEvents();
   autoConnectWallet();
   refreshState();
+  setInterval(() => {
+    refreshState({ silent: true });
+  }, 10_000);
 }
 
 function bindEvents() {
   el.connectBtn.addEventListener('click', connectWallet);
-  el.refreshBtn.addEventListener('click', refreshState);
 
   for (const button of document.querySelectorAll('button[data-count]')) {
     button.addEventListener('click', () => runBatchCheckin(Number(button.dataset.count)));
@@ -112,13 +114,19 @@ async function connectWalletInternal({ allowPrompt, source }) {
   }
 }
 
-async function refreshState() {
+async function refreshState(options = {}) {
+  const { silent = false } = options;
+  if (state.refreshInFlight) return;
+  state.refreshInFlight = true;
+
   try {
     const payload = await api('/api/checkin/state');
     state.profile = payload.profile;
     renderState();
   } catch (error) {
-    log(`State refresh failed: ${error.message}`);
+    if (!silent) log(`State refresh failed: ${error.message}`);
+  } finally {
+    state.refreshInFlight = false;
   }
 }
 
