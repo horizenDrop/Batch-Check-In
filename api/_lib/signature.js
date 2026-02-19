@@ -16,8 +16,20 @@ async function verifyMessageSignature({ message, signature, expectedAddress }) {
     return signature === unsafeDevSignature(message, expectedAddress);
   }
 
-  const recovered = ethers.verifyMessage(message, signature);
-  return recovered.toLowerCase() === String(expectedAddress).toLowerCase();
+  const expected = String(expectedAddress).toLowerCase();
+
+  try {
+    const recoveredText = ethers.verifyMessage(message, signature);
+    if (recoveredText.toLowerCase() === expected) return true;
+  } catch {}
+
+  try {
+    const messageHex = ethers.hexlify(ethers.toUtf8Bytes(message));
+    const recoveredBytes = ethers.verifyMessage(ethers.getBytes(messageHex), signature);
+    if (recoveredBytes.toLowerCase() === expected) return true;
+  } catch {}
+
+  return false;
 }
 
 module.exports = {

@@ -140,10 +140,7 @@ async function runBatchCheckin(count) {
     const nonce = requestPayload.challenge.nonce;
     log(`Challenge prepared for ${count} check-ins`);
 
-    const signature = await window.ethereum.request({
-      method: 'personal_sign',
-      params: [message, state.address]
-    });
+    const signature = await signMessageWithFallback(message, state.address);
 
     const executePayload = await api('/api/checkin/execute', {
       method: 'POST',
@@ -159,6 +156,30 @@ async function runBatchCheckin(count) {
     state.busy = false;
     setActionButtonsDisabled(false);
   }
+}
+
+async function signMessageWithFallback(message, address) {
+  const messageHex = utf8ToHex(message);
+  const attempts = [
+    [message, address],
+    [messageHex, address],
+    [address, message],
+    [address, messageHex]
+  ];
+
+  let lastError = null;
+  for (const params of attempts) {
+    try {
+      return await window.ethereum.request({
+        method: 'personal_sign',
+        params
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(lastError?.message || 'Unable to sign message');
 }
 
 function setActionButtonsDisabled(disabled) {
@@ -207,6 +228,13 @@ function isBaseAppContext() {
 
 function short(value) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function utf8ToHex(value) {
+  const bytes = new TextEncoder().encode(value);
+  let hex = '0x';
+  for (const b of bytes) hex += b.toString(16).padStart(2, '0');
+  return hex;
 }
 
 function log(message) {
