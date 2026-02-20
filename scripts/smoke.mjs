@@ -1,7 +1,6 @@
+import health from '../api/health.js';
 import checkinState from '../api/checkin/state.js';
-import checkinRequest from '../api/checkin/request.js';
-import checkinExecute from '../api/checkin/execute.js';
-import { unsafeDevSignature } from '../api/_lib/signature.js';
+import checkinPrepare from '../api/checkin/prepare.js';
 
 function call(handler, { method = 'GET', body = {}, query = {}, headers = {} } = {}) {
   return new Promise((resolve) => {
@@ -31,8 +30,15 @@ function assertOk(result, label) {
 }
 
 async function main() {
+  if (!process.env.CHECKIN_CONTRACT_ADDRESS) {
+    process.env.CHECKIN_CONTRACT_ADDRESS = '0x000000000000000000000000000000000000dEaD';
+  }
+
   const headers = { 'x-player-id': `smoke_${Date.now()}` };
   const address = '0x1111111111111111111111111111111111111111';
+
+  const healthResult = await call(health);
+  assertOk(healthResult, 'health');
 
   const before = await call(checkinState, {
     headers: { ...headers, 'x-wallet-address': address }
@@ -42,73 +48,38 @@ async function main() {
     throw new Error('initial totalCheckins should be 0');
   }
 
-  const requested = await call(checkinRequest, {
+  const prepared = await call(checkinPrepare, {
     method: 'POST',
     headers,
     body: {
-      address,
       count: 10
     }
   });
-  assertOk(requested, 'checkin/request');
+  assertOk(prepared, 'checkin/prepare');
+  if (prepared.payload.txRequest?.to?.toLowerCase() !== process.env.CHECKIN_CONTRACT_ADDRESS.toLowerCase()) {
+    throw new Error('prepared tx must target configured contract');
+  }
+  if (!String(prepared.payload.txRequest?.data || '').startsWith('0x')) {
+    throw new Error('prepared tx must include calldata');
+  }
 
-  const { message, challengeToken } = requested.payload.challenge;
-  const signature = unsafeDevSignature(message, address);
-
-  const executed = await call(checkinExecute, {
+  const invalidPrepare = await call(checkinPrepare, {
     method: 'POST',
     headers,
     body: {
-      challengeToken,
-      signature,
-      requestId: 'req_signed_0001'
+      count: 2
     }
   });
-  assertOk(executed, 'checkin/execute');
-  if (executed.payload.applied !== 10) {
-    throw new Error('applied checkins should be 10');
-  }
-  if (!executed.payload.sessionToken) {
-    throw new Error('session token should be returned after signed execution');
-  }
-
-  const sessionExecuted = await call(checkinExecute, {
-    method: 'POST',
-    headers,
-    body: {
-      sessionToken: executed.payload.sessionToken,
-      count: 100,
-      requestId: 'req_session_0001'
-    }
-  });
-  assertOk(sessionExecuted, 'checkin/execute session');
-  if (sessionExecuted.payload.applied !== 100) {
-    throw new Error('session applied checkins should be 100');
-  }
-  if (!sessionExecuted.payload.sessionToken || sessionExecuted.payload.sessionToken === executed.payload.sessionToken) {
-    throw new Error('session token should rotate on execute');
-  }
-
-  const replay = await call(checkinExecute, {
-    method: 'POST',
-    headers,
-    body: {
-      sessionToken: sessionExecuted.payload.sessionToken,
-      count: 100,
-      requestId: 'req_session_0001'
-    }
-  });
-  assertOk(replay, 'checkin/execute idempotent replay');
-  if (!replay.payload.idempotent) {
-    throw new Error('replay should be marked idempotent');
+  if (invalidPrepare.payload?.ok !== false || invalidPrepare.statusCode !== 400) {
+    throw new Error('invalid count should return 400');
   }
 
   const after = await call(checkinState, {
     headers: { ...headers, 'x-wallet-address': address }
   });
   assertOk(after, 'checkin/state after');
-  if (after.payload.profile.totalCheckins !== 110) {
-    throw new Error('totalCheckins should be 110 after signed+session executes');
+  if (after.payload.profile.totalCheckins !== 0) {
+    throw new Error('state must not change without onchain execute');
   }
 
   console.log(
@@ -117,7 +88,8 @@ async function main() {
         ok: true,
         playerId: headers['x-player-id'],
         totalCheckins: after.payload.profile.totalCheckins,
-        actions: after.payload.profile.actions
+        actions: after.payload.profile.actions,
+        contract: prepared.payload.txRequest?.to
       },
       null,
       2

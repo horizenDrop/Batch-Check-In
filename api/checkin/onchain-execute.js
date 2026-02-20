@@ -2,9 +2,12 @@ const { ethers } = require('ethers');
 const { badRequest, getPlayerId, json, methodGuard, readBody, tooManyRequests } = require('../_lib/http');
 const { checkRateLimit } = require('../_lib/rate-limit');
 const store = require('../_lib/checkin-store');
-
-const ALLOWED_COUNTS = new Set([1, 10, 100]);
-const BASE_CHAIN_ID = 8453;
+const {
+  ALLOWED_COUNTS,
+  BASE_CHAIN_ID,
+  getCheckinContractAddress,
+  parseCheckinEventFromReceipt
+} = require('../_lib/checkin-contract');
 
 let provider = null;
 
@@ -61,18 +64,20 @@ module.exports = async function handler(req, res) {
   });
   if (!rl.allowed) return tooManyRequests(res, 'Too many onchain execute requests', rl.retryAfterMs);
 
-  const requestedCount = Number(body.count);
-  if (!ALLOWED_COUNTS.has(requestedCount)) return badRequest(res, 'count must be 1, 10, or 100');
+  const expectedCount = Number(body.count);
+  if (!ALLOWED_COUNTS.has(expectedCount)) return badRequest(res, 'count must be 1, 10, or 100');
 
   const txHash = String(body.txHash || '').trim().toLowerCase();
   if (!/^0x[a-f0-9]{64}$/.test(txHash)) return badRequest(res, 'Valid txHash is required');
 
-  const address = String(body.address || '').trim().toLowerCase();
-  if (!/^0x[a-f0-9]{40}$/.test(address)) return badRequest(res, 'Valid wallet address is required');
+  const contractAddress = getCheckinContractAddress();
+  if (!contractAddress) {
+    return json(res, 500, { ok: false, error: 'CHECKIN_CONTRACT_ADDRESS is not configured' });
+  }
 
   const existingClaim = await store.getTxClaim(txHash);
   if (existingClaim) {
-    if (Number(existingClaim.applied) !== requestedCount) {
+    if (Number(existingClaim.applied) !== expectedCount) {
       return badRequest(res, `Transaction already claimed with count ${existingClaim.applied}`);
     }
     return json(res, 200, { ok: true, ...existingClaim, idempotent: true });
@@ -83,43 +88,32 @@ module.exports = async function handler(req, res) {
   if (!receipt) return badRequest(res, 'Transaction not visible on Base RPC yet. Retry in a few seconds.');
   if (receipt.status !== 1) return badRequest(res, 'Transaction failed');
 
-  if (tx) {
-    const txChain = Number(tx.chainId || 0);
-    if (txChain !== BASE_CHAIN_ID) return badRequest(res, 'Transaction must be on Base Mainnet');
+  if (tx && Number(tx.chainId || BASE_CHAIN_ID) !== BASE_CHAIN_ID) {
+    return badRequest(res, 'Transaction must be on Base Mainnet');
   }
 
-  const txFrom = String(tx?.from || '').toLowerCase();
-  const txTo = String(tx?.to || '').toLowerCase();
-  const rcFrom = String(receipt?.from || '').toLowerCase();
-  const rcTo = String(receipt?.to || '').toLowerCase();
-  const boundToAddress = [txFrom, txTo, rcFrom, rcTo].includes(address);
-  const bindingMode = boundToAddress ? 'bound' : 'unbound_smart_wallet_or_bundler';
-
-  let effectiveCount = requestedCount;
-  if (tx?.value !== undefined && tx?.value !== null) {
-    const valueCount = Number(tx.value);
-    if (ALLOWED_COUNTS.has(valueCount)) {
-      effectiveCount = valueCount;
-    }
-    if (ALLOWED_COUNTS.has(valueCount) && valueCount !== requestedCount) {
-      return badRequest(res, `Count mismatch: tx value implies ${valueCount}, request says ${requestedCount}`);
-    }
+  const eventData = parseCheckinEventFromReceipt(receipt, contractAddress);
+  if (!eventData) {
+    return badRequest(res, 'CheckedIn event not found in transaction receipt');
   }
 
-  const profileId = `wallet:${address}`;
-  const profile = await store.applyCheckins(profileId, effectiveCount);
+  if (eventData.count !== expectedCount) {
+    return badRequest(res, `Count mismatch: event has ${eventData.count}, request says ${expectedCount}`);
+  }
+
+  const profileId = `wallet:${eventData.account}`;
+  const profile = await store.applyCheckins(profileId, eventData.count);
 
   const responsePayload = {
-    applied: effectiveCount,
+    applied: eventData.count,
     profile,
+    account: eventData.account,
     txHash,
     tx: {
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
-      feeWei: receipt.fee?.toString?.() || null,
-      bindingMode
-    },
-    boundToAddress
+      feeWei: receipt.fee?.toString?.() || null
+    }
   };
 
   await store.saveTxClaim(txHash, responsePayload);
@@ -128,14 +122,13 @@ module.exports = async function handler(req, res) {
     JSON.stringify({
       event: 'checkin.execute.onchain',
       playerId,
-      address,
+      account: eventData.account,
       txHash,
-      requestedCount,
-      effectiveCount,
+      requestedCount: expectedCount,
+      effectiveCount: eventData.count,
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
-      boundToAddress,
-      bindingMode,
+      contractAddress,
       timestamp: new Date().toISOString()
     })
   );

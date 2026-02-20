@@ -15,10 +15,10 @@
       <div class="hero-glow"></div>
       <div class="hero-head">
         <span class="pill live">LIVE ON BASE</span>
-        <span class="pill neutral">Onchain Tx Flow</span>
+        <span class="pill neutral">Contract Check-In</span>
       </div>
       <h1>Batch Check-In</h1>
-      <p>Pick 1, 10, or 100. Each action sends a cheap Base Mainnet transaction and then credits check-ins.</p>
+      <p>Pick 1, 10, or 100. Each action calls the onchain check-in contract and credits exactly that batch size.</p>
     </section>
 
     <section class="card state-card">
@@ -34,7 +34,7 @@
     <section class="card">
       <div class="card-head">
         <h2>Check-In Actions</h2>
-        <span class="caption">Each action submits one low-cost onchain tx</span>
+        <span class="caption">Each action submits one low-cost contract transaction</span>
       </div>
       <div class="actions">
         <article class="action-card">
@@ -62,7 +62,7 @@
           <button data-count="100" class="action-btn">Run 100 Check-Ins</button>
         </article>
       </div>
-      <p class="hint">Flow: send tx on Base -> wait confirmation -> credit selected batch.</p>
+      <p class="hint">Flow: prepare calldata -> send contract tx -> wait confirmation -> credit event batch.</p>
     </section>
 
     <section class="card">

@@ -5,27 +5,38 @@ Mini app with 3 actions:
 - `10 check-ins`
 - `100 check-ins`
 
-Primary flow (current UI):
-1. Send cheap Base Mainnet transaction (self-transfer `0 ETH`)
-2. Wait for confirmation
-3. `POST /api/checkin/onchain-execute` applies selected batch after tx verification
+Primary flow:
+1. `POST /api/checkin/prepare` returns contract calldata for `checkIn(count)`
+2. Wallet sends one Base Mainnet transaction to `BatchCheckIn` contract
+3. App waits for confirmation
+4. `POST /api/checkin/onchain-execute` verifies receipt event and applies exact onchain count
 
 ## API
 - `GET /api/checkin/state`
+- `POST /api/checkin/prepare`
 - `POST /api/checkin/onchain-execute`
-- `POST /api/checkin/request`
-- `POST /api/checkin/execute`
 - `GET /api/health`
 
-## Base Mainnet Signature Verification
-- Supports EOA signatures and ERC-1271 smart wallet signatures.
-- Uses `BASE_RPC_URL` (default `https://mainnet.base.org`) to validate contract-wallet signatures.
+## Contract
+- Solidity source: `contracts/BatchCheckIn.sol`
+- Required function:
+  - `checkIn(uint256 count)` where count is only `1`, `10`, or `100`
+- Required event:
+  - `CheckedIn(address indexed account, uint256 count)`
+
+Deploy this contract on Base Mainnet and set its address in `CHECKIN_CONTRACT_ADDRESS`.
+
+## Environment
+- `APP_URL=https://batch-check-in.vercel.app`
+- `BASE_RPC_URL=https://mainnet.base.org`
+- `CHECKIN_CONTRACT_ADDRESS=0x...` (deployed Base Mainnet contract)
+- `REDIS_URL=` (optional, for persistent state)
 
 ## Security and Reliability
-- Rate limits on challenge, execute, and onchain-execute endpoints.
-- Idempotent execute via `requestId` (safe retries without double-apply).
-- Session tokens are short-lived and rotated on every execute.
-- Structured signature verification logs are emitted server-side.
+- Rate limits on prepare and onchain-execute endpoints.
+- Tx hash claim cache prevents double counting.
+- Backend credits from verified contract event only (not from UI value).
+- Structured onchain verification logs are emitted server-side.
 
 ## Local Build
 ```bash

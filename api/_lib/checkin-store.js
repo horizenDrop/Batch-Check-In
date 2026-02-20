@@ -1,18 +1,12 @@
-const crypto = require('crypto');
 const db = require('./state');
 
 const memory = {
   profiles: new Map(),
-  idempotency: new Map(),
   txClaims: new Map()
 };
 
 function profileKey(playerId) {
   return `checkin:profile:${playerId}`;
-}
-
-function idempotencyKey(playerId, requestId) {
-  return `checkin:idempotency:${playerId}:${requestId}`;
 }
 
 function txClaimKey(txHash) {
@@ -64,37 +58,6 @@ async function applyCheckins(subjectId, count) {
   return saveProfile(current);
 }
 
-async function getIdempotentResult(playerId, requestId) {
-  if (!requestId) return null;
-  const redis = await db.getRedisClient();
-  if (redis) {
-    const raw = await redis.get(idempotencyKey(playerId, requestId));
-    return raw ? JSON.parse(raw) : null;
-  }
-
-  const item = memory.idempotency.get(idempotencyKey(playerId, requestId)) || null;
-  if (!item) return null;
-  if (item.expiresAtMs < Date.now()) {
-    memory.idempotency.delete(idempotencyKey(playerId, requestId));
-    return null;
-  }
-  return item.payload;
-}
-
-async function saveIdempotentResult(playerId, requestId, payload, ttlMs = 15 * 60 * 1000) {
-  if (!requestId) return;
-  const redis = await db.getRedisClient();
-  if (redis) {
-    await redis.set(idempotencyKey(playerId, requestId), JSON.stringify(payload), { PX: ttlMs });
-    return;
-  }
-
-  memory.idempotency.set(idempotencyKey(playerId, requestId), {
-    payload,
-    expiresAtMs: Date.now() + ttlMs
-  });
-}
-
 async function getTxClaim(txHash) {
   if (!txHash) return null;
   const key = txClaimKey(txHash);
@@ -117,29 +80,9 @@ async function saveTxClaim(txHash, payload, ttlMs = 365 * 24 * 60 * 60 * 1000) {
   memory.txClaims.set(key, payload);
 }
 
-function createChallenge({ playerId, address, count }) {
-  const nonce = crypto.randomUUID().replaceAll('-', '');
-  const issuedAt = nowIso();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-  const message = `BatchCheckIn|player:${playerId}|addr:${address}|count:${count}|nonce:${nonce}|exp:${expiresAt}`;
-
-  return {
-    nonce,
-    playerId,
-    address,
-    count,
-    issuedAt,
-    expiresAt,
-    message
-  };
-}
-
 module.exports = {
   applyCheckins,
-  createChallenge,
-  getIdempotentResult,
   getProfile,
   getTxClaim,
-  saveIdempotentResult,
   saveTxClaim
 };

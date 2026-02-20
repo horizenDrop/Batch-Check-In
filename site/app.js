@@ -1,6 +1,5 @@
 const playerId = ensurePlayerId();
 const CONNECTED_FLAG_KEY = 'batch_checkin_wallet_connected';
-const LAST_ADDRESS_KEY = 'batch_checkin_last_address';
 const state = {
   address: null,
   profile: null,
@@ -102,7 +101,6 @@ async function connectWalletInternal({ allowPrompt, source }) {
 
     state.address = address;
     localStorage.setItem(CONNECTED_FLAG_KEY, '1');
-    localStorage.setItem(LAST_ADDRESS_KEY, address);
     el.connectBtn.textContent = short(address);
     renderState();
     refreshState({ silent: true });
@@ -142,7 +140,11 @@ async function runBatchCheckin(count) {
     }
 
     await ensureBaseMainnet();
-    const txRef = await sendCheckinTransaction(count);
+    const prepared = await api('/api/checkin/prepare', {
+      method: 'POST',
+      body: JSON.stringify({ count })
+    });
+    const txRef = await sendCheckinTransaction(prepared.txRequest);
     let txHash = txRef.txHash || null;
     if (txHash) {
       log(`Onchain tx submitted: ${shortHash(txHash)}`);
@@ -155,14 +157,11 @@ async function runBatchCheckin(count) {
 
     log('Transaction confirmed on Base.');
 
-    const requestId = createRequestId();
     const executePayload = await api('/api/checkin/onchain-execute', {
       method: 'POST',
       body: JSON.stringify({
         txHash,
-        count,
-        address: state.address,
-        requestId
+        count
       })
     });
 
@@ -192,14 +191,15 @@ async function ensureBaseMainnet() {
   }
 }
 
-async function sendCheckinTransaction(count) {
+async function sendCheckinTransaction(txRequest) {
   if (!window.ethereum) throw new Error('Wallet provider not available');
-  const valueHex = toHexWeiCount(count);
+  if (!txRequest || typeof txRequest !== 'object') throw new Error('Invalid txRequest');
   const txParams = [
     {
       from: state.address,
-      to: state.address,
-      value: valueHex
+      to: txRequest.to,
+      value: normalizeHexValue(txRequest.value),
+      data: txRequest.data
     }
   ];
 
@@ -219,7 +219,11 @@ async function sendCheckinTransaction(count) {
             version: '1.0',
             chainId: '0x2105',
             from: state.address,
-            calls: [{ to: state.address, value: valueHex }]
+            calls: [{
+              to: txRequest.to,
+              value: normalizeHexValue(txRequest.value),
+              data: txRequest.data
+            }]
           }
         ]
       });
@@ -291,15 +295,14 @@ function onAccountsChanged(accounts) {
   }
   state.address = address;
   localStorage.setItem(CONNECTED_FLAG_KEY, '1');
-  localStorage.setItem(LAST_ADDRESS_KEY, address);
   el.connectBtn.textContent = short(address);
   renderState();
+  refreshState({ silent: true });
 }
 
 function onDisconnect() {
   state.address = null;
   localStorage.removeItem(CONNECTED_FLAG_KEY);
-  localStorage.removeItem(LAST_ADDRESS_KEY);
   el.connectBtn.textContent = 'Connect Wallet';
   renderState();
 }
@@ -317,22 +320,18 @@ function shortHash(value) {
   return `${value.slice(0, 10)}...${value.slice(-6)}`;
 }
 
-function toHexWeiCount(count) {
-  if (![1, 10, 100].includes(Number(count))) {
-    throw new Error('Unsupported check-in count');
+function normalizeHexValue(value) {
+  if (!value) return '0x0';
+  if (typeof value !== 'string') return '0x0';
+  const normalized = value.trim().toLowerCase();
+  if (!/^0x[0-9a-f]+$/.test(normalized)) {
+    throw new Error('Invalid transaction value from prepare endpoint');
   }
-  return `0x${Number(count).toString(16)}`;
+  return normalized;
 }
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function createRequestId() {
-  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-    return window.crypto.randomUUID().replaceAll('-', '');
-  }
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function log(message) {

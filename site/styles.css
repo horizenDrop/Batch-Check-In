@@ -252,10 +252,6 @@ button:disabled {
 }
 
 @media (max-width: 740px) {
-  body {
-    display: block;
-  }
-
   .app {
     padding: 10px;
   }
