@@ -15,6 +15,37 @@ function getProvider() {
   return provider;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForBaseVisibility(rpc, txHash, timeoutMs = 45_000) {
+  const started = Date.now();
+  let lastTx = null;
+  let lastReceipt = null;
+
+  while (Date.now() - started < timeoutMs) {
+    const [tx, receipt] = await Promise.all([
+      rpc.getTransaction(txHash).catch(() => null),
+      rpc.getTransactionReceipt(txHash).catch(() => null)
+    ]);
+
+    if (tx) lastTx = tx;
+    if (receipt) lastReceipt = receipt;
+
+    if (lastReceipt && Number(lastReceipt.status) === 1) {
+      return { tx: lastTx, receipt: lastReceipt };
+    }
+    if (lastReceipt && Number(lastReceipt.status) === 0) {
+      return { tx: lastTx, receipt: lastReceipt };
+    }
+
+    await sleep(1800);
+  }
+
+  return { tx: lastTx, receipt: lastReceipt };
+}
+
 module.exports = async function handler(req, res) {
   if (!methodGuard(req, res, 'POST')) return;
 
@@ -45,18 +76,21 @@ module.exports = async function handler(req, res) {
   }
 
   const rpc = getProvider();
-  const [tx, receipt] = await Promise.all([rpc.getTransaction(txHash), rpc.getTransactionReceipt(txHash)]);
-  if (!tx || !receipt) return badRequest(res, 'Transaction not found yet. Wait for confirmation.');
+  const { tx, receipt } = await waitForBaseVisibility(rpc, txHash);
+  if (!receipt) return badRequest(res, 'Transaction not visible on Base RPC yet. Retry in a few seconds.');
   if (receipt.status !== 1) return badRequest(res, 'Transaction failed');
 
-  const txChain = Number(tx.chainId || 0);
-  if (txChain !== BASE_CHAIN_ID) return badRequest(res, 'Transaction must be on Base Mainnet');
+  if (tx) {
+    const txChain = Number(tx.chainId || 0);
+    if (txChain !== BASE_CHAIN_ID) return badRequest(res, 'Transaction must be on Base Mainnet');
+  }
 
-  const txFrom = String(tx.from || '').toLowerCase();
-  if (txFrom !== address) return badRequest(res, 'Transaction sender mismatch');
-
-  const txTo = String(tx.to || '').toLowerCase();
-  if (txTo !== address) return badRequest(res, 'Use self-transfer transaction for check-in');
+  const txFrom = String(tx?.from || '').toLowerCase();
+  const txTo = String(tx?.to || '').toLowerCase();
+  const rcFrom = String(receipt?.from || '').toLowerCase();
+  const rcTo = String(receipt?.to || '').toLowerCase();
+  const boundToAddress = [txFrom, txTo, rcFrom, rcTo].includes(address);
+  const bindingMode = boundToAddress ? 'bound' : 'unbound_smart_wallet_or_bundler';
 
   const profileId = `wallet:${address}`;
   const profile = await store.applyCheckins(profileId, count);
@@ -68,8 +102,10 @@ module.exports = async function handler(req, res) {
     tx: {
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
-      feeWei: receipt.fee?.toString?.() || null
-    }
+      feeWei: receipt.fee?.toString?.() || null,
+      bindingMode
+    },
+    boundToAddress
   };
 
   await store.saveTxClaim(txHash, responsePayload);
@@ -83,6 +119,8 @@ module.exports = async function handler(req, res) {
       count,
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
+      boundToAddress,
+      bindingMode,
       timestamp: new Date().toISOString()
     })
   );
