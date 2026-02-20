@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "frame": {
+    "version": "1",
+    "name": "Batch Check-In",
+    "iconUrl": "https://batch-check-in.vercel.app/og.svg",
+    "homeUrl": "https://batch-check-in.vercel.app",
+    "imageUrl": "https://batch-check-in.vercel.app/og.svg",
+    "buttonTitle": "Open Batch Check-In",
+    "splashImageUrl": "https://batch-check-in.vercel.app/og.svg",
+    "splashBackgroundColor": "#0b1220",
+    "webhookUrl": "https://batch-check-in.vercel.app/api/webhook"
+  }
+}
