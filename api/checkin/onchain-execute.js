@@ -61,8 +61,8 @@ module.exports = async function handler(req, res) {
   });
   if (!rl.allowed) return tooManyRequests(res, 'Too many onchain execute requests', rl.retryAfterMs);
 
-  const count = Number(body.count);
-  if (!ALLOWED_COUNTS.has(count)) return badRequest(res, 'count must be 1, 10, or 100');
+  const requestedCount = Number(body.count);
+  if (!ALLOWED_COUNTS.has(requestedCount)) return badRequest(res, 'count must be 1, 10, or 100');
 
   const txHash = String(body.txHash || '').trim().toLowerCase();
   if (!/^0x[a-f0-9]{64}$/.test(txHash)) return badRequest(res, 'Valid txHash is required');
@@ -72,6 +72,9 @@ module.exports = async function handler(req, res) {
 
   const existingClaim = await store.getTxClaim(txHash);
   if (existingClaim) {
+    if (Number(existingClaim.applied) !== requestedCount) {
+      return badRequest(res, `Transaction already claimed with count ${existingClaim.applied}`);
+    }
     return json(res, 200, { ok: true, ...existingClaim, idempotent: true });
   }
 
@@ -92,11 +95,22 @@ module.exports = async function handler(req, res) {
   const boundToAddress = [txFrom, txTo, rcFrom, rcTo].includes(address);
   const bindingMode = boundToAddress ? 'bound' : 'unbound_smart_wallet_or_bundler';
 
+  let effectiveCount = requestedCount;
+  if (tx?.value !== undefined && tx?.value !== null) {
+    const valueCount = Number(tx.value);
+    if (ALLOWED_COUNTS.has(valueCount)) {
+      effectiveCount = valueCount;
+    }
+    if (ALLOWED_COUNTS.has(valueCount) && valueCount !== requestedCount) {
+      return badRequest(res, `Count mismatch: tx value implies ${valueCount}, request says ${requestedCount}`);
+    }
+  }
+
   const profileId = `wallet:${address}`;
-  const profile = await store.applyCheckins(profileId, count);
+  const profile = await store.applyCheckins(profileId, effectiveCount);
 
   const responsePayload = {
-    applied: count,
+    applied: effectiveCount,
     profile,
     txHash,
     tx: {
@@ -116,7 +130,8 @@ module.exports = async function handler(req, res) {
       playerId,
       address,
       txHash,
-      count,
+      requestedCount,
+      effectiveCount,
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
       boundToAddress,

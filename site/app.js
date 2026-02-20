@@ -142,7 +142,7 @@ async function runBatchCheckin(count) {
     }
 
     await ensureBaseMainnet();
-    const txRef = await sendCheckinTransaction();
+    const txRef = await sendCheckinTransaction(count);
     let txHash = txRef.txHash || null;
     if (txHash) {
       log(`Onchain tx submitted: ${shortHash(txHash)}`);
@@ -192,13 +192,14 @@ async function ensureBaseMainnet() {
   }
 }
 
-async function sendCheckinTransaction() {
+async function sendCheckinTransaction(count) {
   if (!window.ethereum) throw new Error('Wallet provider not available');
+  const valueHex = toHexWeiCount(count);
   const txParams = [
     {
       from: state.address,
       to: state.address,
-      value: '0x0'
+      value: valueHex
     }
   ];
 
@@ -218,7 +219,7 @@ async function sendCheckinTransaction() {
             version: '1.0',
             chainId: '0x2105',
             from: state.address,
-            calls: [{ to: state.address, value: '0x0' }]
+            calls: [{ to: state.address, value: valueHex }]
           }
         ]
       });
@@ -255,7 +256,8 @@ async function waitForCallTransactionHash(callId, timeoutMs = 120000) {
     });
 
     const receipts = status?.receipts || [];
-    const txHash = receipts[0]?.transactionHash || receipts[0]?.txHash || null;
+    const lastReceipt = [...receipts].reverse().find((item) => item?.transactionHash || item?.txHash);
+    const txHash = lastReceipt?.transactionHash || lastReceipt?.txHash || null;
     const finalized = status?.status === 'CONFIRMED' || status?.status === 'confirmed';
     if (finalized && txHash) return txHash;
 
@@ -313,6 +315,13 @@ function short(value) {
 
 function shortHash(value) {
   return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
+function toHexWeiCount(count) {
+  if (![1, 10, 100].includes(Number(count))) {
+    throw new Error('Unsupported check-in count');
+  }
+  return `0x${Number(count).toString(16)}`;
 }
 
 function sleep(ms) {
