@@ -20,7 +20,7 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100dvh;
   font-family: "Inter", "Segoe UI", sans-serif;
   color: var(--ink);
   background:
@@ -29,6 +29,9 @@ body {
     radial-gradient(circle at 50% 120%, rgba(21, 214, 195, 0.16), transparent 36%),
     var(--bg);
   overflow-x: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .app {
@@ -249,6 +252,10 @@ button:disabled {
 }
 
 @media (max-width: 740px) {
+  body {
+    display: block;
+  }
+
   .app {
     padding: 10px;
   }
