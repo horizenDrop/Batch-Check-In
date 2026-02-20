@@ -17,3 +17,4 @@
 4. Confirm transaction in wallet.
 5. Confirm `streak` and `total check-ins` increment.
 6. Press again on the same day and confirm cooldown/revert behavior.
+7. Open `/api/streak/state` and confirm profile returns for connected wallet.

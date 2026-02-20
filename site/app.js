@@ -52,7 +52,6 @@ function defaultProfile() {
   return {
     streak: 0,
     totalCheckins: 0,
-    actions: 0,
     lastCheckInAt: null,
     nextCheckInAt: null,
     canCheckInNow: true
@@ -129,7 +128,7 @@ async function refreshState(options = {}) {
   if (state.refreshInFlight) return;
   state.refreshInFlight = true;
   try {
-    const payload = await api('/api/checkin/state');
+    const payload = await api('/api/streak/state');
     state.profile = payload.profile || defaultProfile();
     renderState();
   } catch (error) {
@@ -156,7 +155,7 @@ async function runDailyCheckin() {
     }
 
     await ensureBaseMainnet();
-    const prepared = await api('/api/checkin/prepare', {
+    const prepared = await api('/api/streak/prepare', {
       method: 'POST',
       body: JSON.stringify({})
     });
@@ -174,7 +173,7 @@ async function runDailyCheckin() {
 
     log('Transaction confirmed on Base.');
 
-    const executePayload = await api('/api/checkin/onchain-execute', {
+    const executePayload = await api('/api/streak/onchain-execute', {
       method: 'POST',
       body: JSON.stringify({
         txHash,

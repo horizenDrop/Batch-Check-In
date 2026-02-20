@@ -6,10 +6,12 @@ One simple loop:
 3. Grow daily streak + total check-ins
 
 ## App Flow
-- `POST /api/checkin/prepare`: returns tx request for `checkIn()`
+- `POST /api/streak/prepare`: returns tx request for `checkIn()`
 - Wallet submits tx to `DailyStreakLite` contract
-- `POST /api/checkin/onchain-execute`: verifies tx receipt + `CheckedIn` event
-- `GET /api/checkin/state`: returns wallet profile (with optional onchain sync)
+- `POST /api/streak/onchain-execute`: verifies tx receipt + `CheckedIn` event
+- `GET /api/streak/state`: returns wallet profile (with optional onchain sync)
+
+Legacy aliases `/api/checkin/*` remain for backward compatibility.
 
 ## Contract
 - Source: `contracts/DailyStreakLite.sol`

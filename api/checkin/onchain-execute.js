@@ -82,70 +82,89 @@ module.exports = async function handler(req, res) {
     return json(res, 200, { ok: true, ...existingClaim, idempotent: true });
   }
 
-  const rpc = getProvider();
-  const { tx, receipt } = await waitForBaseVisibility(rpc, txHash);
-  if (!receipt) return badRequest(res, 'Transaction not visible on Base RPC yet. Retry in a few seconds.');
-  if (receipt.status !== 1) return badRequest(res, 'Transaction failed');
-
-  if (tx && Number(tx.chainId || BASE_CHAIN_ID) !== BASE_CHAIN_ID) {
-    return badRequest(res, 'Transaction must be on Base Mainnet');
+  const locked = await store.acquireTxLock(txHash);
+  if (!locked) {
+    const claimed = await store.getTxClaim(txHash);
+    if (claimed) return json(res, 200, { ok: true, ...claimed, idempotent: true });
+    return badRequest(res, 'Transaction is being processed. Retry in a few seconds.');
   }
 
-  const eventData = parseCheckinEventFromReceipt(receipt, contractAddress);
-  if (!eventData) {
-    return badRequest(res, 'CheckedIn event not found in transaction receipt');
-  }
-
-  if (expectedAddress && eventData.account !== expectedAddress) {
-    return badRequest(res, 'Transaction does not belong to connected wallet');
-  }
-
-  const profileId = `wallet:${eventData.account}`;
-  const profile = await store.applyDailyCheckin(profileId, {
-    streak: eventData.streak,
-    totalCheckins: eventData.totalCheckins,
-    day: eventData.day,
-    nextCheckInAt: eventData.nextCheckInAt,
-    txHash
-  });
-
-  const responsePayload = {
-    applied: 1,
-    profile,
-    account: eventData.account,
-    txHash,
-    onchain: {
-      streak: eventData.streak,
-      totalCheckins: eventData.totalCheckins,
-      lastCheckInDay: eventData.day,
-      nextCheckInAt: eventData.nextCheckInAt,
-      canCheckInNow: false
-    },
-    tx: {
-      blockNumber: receipt.blockNumber,
-      gasUsed: receipt.gasUsed.toString(),
-      feeWei: receipt.fee?.toString?.() || null
+  try {
+    const existingClaimAfterLock = await store.getTxClaim(txHash);
+    if (existingClaimAfterLock) {
+      if (expectedAddress && String(existingClaimAfterLock.account || '').toLowerCase() !== expectedAddress) {
+        return badRequest(res, 'Transaction already claimed by another wallet');
+      }
+      return json(res, 200, { ok: true, ...existingClaimAfterLock, idempotent: true });
     }
-  };
 
-  await store.saveTxClaim(txHash, responsePayload);
+    const rpc = getProvider();
+    const { tx, receipt } = await waitForBaseVisibility(rpc, txHash);
+    if (!receipt) return badRequest(res, 'Transaction not visible on Base RPC yet. Retry in a few seconds.');
+    if (receipt.status !== 1) return badRequest(res, 'Transaction failed');
 
-  console.log(
-    JSON.stringify({
-      event: 'checkin.execute.onchain',
-      playerId,
-      account: eventData.account,
-      txHash,
+    if (tx && Number(tx.chainId || BASE_CHAIN_ID) !== BASE_CHAIN_ID) {
+      return badRequest(res, 'Transaction must be on Base Mainnet');
+    }
+
+    const eventData = parseCheckinEventFromReceipt(receipt, contractAddress);
+    if (!eventData) {
+      return badRequest(res, 'CheckedIn event not found in transaction receipt');
+    }
+
+    if (expectedAddress && eventData.account !== expectedAddress) {
+      return badRequest(res, 'Transaction does not belong to connected wallet');
+    }
+
+    const profileId = `wallet:${eventData.account}`;
+    const profile = await store.applyDailyCheckin(profileId, {
       streak: eventData.streak,
       totalCheckins: eventData.totalCheckins,
       day: eventData.day,
       nextCheckInAt: eventData.nextCheckInAt,
-      blockNumber: receipt.blockNumber,
-      gasUsed: receipt.gasUsed.toString(),
-      contractAddress,
-      timestamp: new Date().toISOString()
-    })
-  );
+      txHash
+    });
 
-  return json(res, 200, { ok: true, ...responsePayload });
+    const responsePayload = {
+      applied: 1,
+      profile,
+      account: eventData.account,
+      txHash,
+      onchain: {
+        streak: eventData.streak,
+        totalCheckins: eventData.totalCheckins,
+        lastCheckInDay: eventData.day,
+        nextCheckInAt: eventData.nextCheckInAt,
+        canCheckInNow: false
+      },
+      tx: {
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        feeWei: receipt.fee?.toString?.() || null
+      }
+    };
+
+    await store.saveTxClaim(txHash, responsePayload);
+
+    console.log(
+      JSON.stringify({
+        event: 'checkin.execute.onchain',
+        playerId,
+        account: eventData.account,
+        txHash,
+        streak: eventData.streak,
+        totalCheckins: eventData.totalCheckins,
+        day: eventData.day,
+        nextCheckInAt: eventData.nextCheckInAt,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        contractAddress,
+        timestamp: new Date().toISOString()
+      })
+    );
+
+    return json(res, 200, { ok: true, ...responsePayload });
+  } finally {
+    await store.releaseTxLock(txHash);
+  }
 };

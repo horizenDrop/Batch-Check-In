@@ -1,4 +1,4 @@
-const { badRequest, getPlayerId, json } = require('../_lib/http');
+const { badRequest, getPlayerId, json, methodGuard } = require('../_lib/http');
 const { ethers } = require('ethers');
 const { BASE_CHAIN_ID, getCheckinContractAddress, readOnchainStats } = require('../_lib/checkin-contract');
 const store = require('../_lib/checkin-store');
@@ -13,6 +13,8 @@ function getProvider() {
 }
 
 module.exports = async function handler(req, res) {
+  if (!methodGuard(req, res, 'GET')) return;
+
   const playerId = getPlayerId(req, {});
   if (!playerId) return badRequest(res, 'playerId is required');
 

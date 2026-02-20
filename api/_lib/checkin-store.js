@@ -3,7 +3,8 @@ const { DAY_SECONDS } = require('./checkin-contract');
 
 const memory = {
   profiles: new Map(),
-  txClaims: new Map()
+  txClaims: new Map(),
+  txLocks: new Map()
 };
 
 function profileKey(playerId) {
@@ -12,6 +13,10 @@ function profileKey(playerId) {
 
 function txClaimKey(txHash) {
   return `checkin:txclaim:${String(txHash).toLowerCase()}`;
+}
+
+function txLockKey(txHash) {
+  return `checkin:txlock:${String(txHash).toLowerCase()}`;
 }
 
 function nowIso() {
@@ -35,7 +40,6 @@ function defaultProfile(subjectId) {
     subjectId,
     streak: 0,
     totalCheckins: 0,
-    actions: 0,
     lastCheckInDay: 0,
     lastCheckInAt: null,
     nextCheckInAt: null,
@@ -76,7 +80,6 @@ async function applyDailyCheckin(subjectId, eventData) {
     ...current,
     streak: Number(eventData.streak || 0),
     totalCheckins: Number(eventData.totalCheckins || 0),
-    actions: current.actions + 1,
     lastCheckInDay: Number(eventData.day || 0),
     lastCheckInAt: dayToIso(eventData.day),
     nextCheckInAt: unixToIso(eventData.nextCheckInAt),
@@ -113,6 +116,34 @@ async function syncFromOnchain(subjectId, onchainStats) {
   return saveProfile(next);
 }
 
+async function acquireTxLock(txHash, ttlMs = 60 * 1000) {
+  if (!txHash) return false;
+  const key = txLockKey(txHash);
+  const redis = await db.getRedisClient();
+
+  if (redis) {
+    const result = await redis.set(key, '1', { NX: true, PX: ttlMs });
+    return result === 'OK';
+  }
+
+  const now = Date.now();
+  const existing = memory.txLocks.get(key);
+  if (existing && existing > now) return false;
+  memory.txLocks.set(key, now + ttlMs);
+  return true;
+}
+
+async function releaseTxLock(txHash) {
+  if (!txHash) return;
+  const key = txLockKey(txHash);
+  const redis = await db.getRedisClient();
+  if (redis) {
+    await redis.del(key);
+    return;
+  }
+  memory.txLocks.delete(key);
+}
+
 async function getTxClaim(txHash) {
   if (!txHash) return null;
   const key = txClaimKey(txHash);
@@ -136,9 +167,11 @@ async function saveTxClaim(txHash, payload, ttlMs = 365 * 24 * 60 * 60 * 1000) {
 }
 
 module.exports = {
+  acquireTxLock,
   applyDailyCheckin,
   getProfile,
   getTxClaim,
+  releaseTxLock,
   syncFromOnchain,
   saveTxClaim
 };

@@ -4,6 +4,7 @@
 - One-page Base mini app with one onchain action: `Run Daily Check-In`.
 - Contract-level streak rules (one check-in per UTC day).
 - Backend verifies `CheckedIn` event before updating profile.
+- Concurrent execute protection to prevent duplicate tx credit.
 - Auto-refresh state and mobile-first UI.
 
 ## Next

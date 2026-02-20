@@ -1,6 +1,6 @@
 import health from '../api/health.js';
-import checkinState from '../api/checkin/state.js';
-import checkinPrepare from '../api/checkin/prepare.js';
+import streakState from '../api/streak/state.js';
+import streakPrepare from '../api/streak/prepare.js';
 
 function call(handler, { method = 'GET', body = {}, query = {}, headers = {} } = {}) {
   return new Promise((resolve) => {
@@ -40,20 +40,20 @@ async function main() {
   const healthResult = await call(health);
   assertOk(healthResult, 'health');
 
-  const before = await call(checkinState, {
+  const before = await call(streakState, {
     headers: { ...headers, 'x-wallet-address': address }
   });
-  assertOk(before, 'checkin/state before');
+  assertOk(before, 'streak/state before');
   if (before.payload.profile.totalCheckins !== 0) {
     throw new Error('initial totalCheckins should be 0');
   }
 
-  const prepared = await call(checkinPrepare, {
+  const prepared = await call(streakPrepare, {
     method: 'POST',
     headers,
     body: {}
   });
-  assertOk(prepared, 'checkin/prepare');
+  assertOk(prepared, 'streak/prepare');
 
   const txRequest = prepared.payload.txRequest || {};
   if (String(txRequest.to || '').toLowerCase() !== process.env.CHECKIN_CONTRACT_ADDRESS.toLowerCase()) {
@@ -66,15 +66,15 @@ async function main() {
     throw new Error('prepared tx value should be 0x0');
   }
 
-  const wrongMethod = await call(checkinPrepare, { method: 'GET', headers });
+  const wrongMethod = await call(streakPrepare, { method: 'GET', headers });
   if (wrongMethod.statusCode !== 405 || wrongMethod.payload?.ok !== false) {
     throw new Error('prepare GET should be rejected with 405');
   }
 
-  const after = await call(checkinState, {
+  const after = await call(streakState, {
     headers: { ...headers, 'x-wallet-address': address }
   });
-  assertOk(after, 'checkin/state after');
+  assertOk(after, 'streak/state after');
   if (after.payload.profile.totalCheckins !== 0 || after.payload.profile.streak !== 0) {
     throw new Error('state must stay unchanged without onchain execute');
   }
