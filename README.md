@@ -24,7 +24,8 @@ One simple loop:
 - `APP_URL=https://batch-check-in.vercel.app`
 - `BASE_RPC_URL=https://mainnet.base.org`
 - `CHECKIN_CONTRACT_ADDRESS=0x...` (deployed `DailyStreakLite` on Base Mainnet)
-- `REDIS_URL=` (optional, for persistent storage)
+- `REDIS_URL=redis://...` or `REDIS_URL=rediss://...` (optional, for persistent storage)
+  - Do not include extra quotes in Vercel value field.
 
 ## Commands
 ```bash
