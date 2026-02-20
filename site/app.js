@@ -69,7 +69,17 @@ async function api(path, options = {}) {
     }
   });
 
-  const payload = await response.json().catch(() => ({ ok: false, error: 'Invalid JSON' }));
+  const rawText = await response.text();
+  let payload = null;
+  try {
+    payload = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    payload = null;
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error(`Invalid JSON (HTTP ${response.status})`);
+  }
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || `HTTP ${response.status}`);
   }

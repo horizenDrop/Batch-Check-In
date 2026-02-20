@@ -10,6 +10,7 @@ One simple loop:
 - Wallet submits tx to `DailyStreakLite` contract
 - `POST /api/streak/onchain-execute`: verifies tx receipt + `CheckedIn` event
 - `GET /api/streak/state`: returns wallet profile (with optional onchain sync)
+- `GET /api/health`: returns app status + Redis connectivity status
 
 Legacy aliases `/api/checkin/*` remain for backward compatibility.
 

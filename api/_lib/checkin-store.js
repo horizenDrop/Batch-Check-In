@@ -7,6 +7,15 @@ const memory = {
   txLocks: new Map()
 };
 
+function safeJsonParse(raw) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 function profileKey(playerId) {
   return `checkin:profile:${playerId}`;
 }
@@ -52,8 +61,14 @@ function defaultProfile(subjectId) {
 async function getProfile(subjectId) {
   const redis = await db.getRedisClient();
   if (redis) {
-    const raw = await redis.get(profileKey(subjectId));
-    return raw ? JSON.parse(raw) : defaultProfile(subjectId);
+    try {
+      const raw = await redis.get(profileKey(subjectId));
+      const parsed = safeJsonParse(raw);
+      return parsed || defaultProfile(subjectId);
+    } catch {
+      // fallback to in-memory profile on Redis read issues
+      return memory.profiles.get(subjectId) || defaultProfile(subjectId);
+    }
   }
 
   return memory.profiles.get(subjectId) || defaultProfile(subjectId);
@@ -66,8 +81,12 @@ async function saveProfile(profile) {
   const next = { ...profile, subjectId, updatedAt: nowIso() };
   const redis = await db.getRedisClient();
   if (redis) {
-    await redis.set(profileKey(subjectId), JSON.stringify(next));
-    return next;
+    try {
+      await redis.set(profileKey(subjectId), JSON.stringify(next));
+      return next;
+    } catch {
+      // continue with memory fallback when Redis is unavailable
+    }
   }
 
   memory.profiles.set(subjectId, next);
@@ -122,8 +141,12 @@ async function acquireTxLock(txHash, ttlMs = 60 * 1000) {
   const redis = await db.getRedisClient();
 
   if (redis) {
-    const result = await redis.set(key, '1', { NX: true, PX: ttlMs });
-    return result === 'OK';
+    try {
+      const result = await redis.set(key, '1', { NX: true, PX: ttlMs });
+      return result === 'OK';
+    } catch {
+      // fallback to in-memory locking
+    }
   }
 
   const now = Date.now();
@@ -138,8 +161,12 @@ async function releaseTxLock(txHash) {
   const key = txLockKey(txHash);
   const redis = await db.getRedisClient();
   if (redis) {
-    await redis.del(key);
-    return;
+    try {
+      await redis.del(key);
+      return;
+    } catch {
+      // continue with memory cleanup
+    }
   }
   memory.txLocks.delete(key);
 }
@@ -149,8 +176,13 @@ async function getTxClaim(txHash) {
   const key = txClaimKey(txHash);
   const redis = await db.getRedisClient();
   if (redis) {
-    const raw = await redis.get(key);
-    return raw ? JSON.parse(raw) : null;
+    try {
+      const raw = await redis.get(key);
+      const parsed = safeJsonParse(raw);
+      return parsed || null;
+    } catch {
+      // fallback to memory when Redis read fails
+    }
   }
   return memory.txClaims.get(key) || null;
 }
@@ -160,8 +192,12 @@ async function saveTxClaim(txHash, payload, ttlMs = 365 * 24 * 60 * 60 * 1000) {
   const key = txClaimKey(txHash);
   const redis = await db.getRedisClient();
   if (redis) {
-    await redis.set(key, JSON.stringify(payload), { PX: ttlMs });
-    return;
+    try {
+      await redis.set(key, JSON.stringify(payload), { PX: ttlMs });
+      return;
+    } catch {
+      // continue with memory fallback
+    }
   }
   memory.txClaims.set(key, payload);
 }
