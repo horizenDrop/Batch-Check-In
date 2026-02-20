@@ -3,7 +3,8 @@ const db = require('./state');
 
 const memory = {
   profiles: new Map(),
-  idempotency: new Map()
+  idempotency: new Map(),
+  txClaims: new Map()
 };
 
 function profileKey(playerId) {
@@ -12,6 +13,10 @@ function profileKey(playerId) {
 
 function idempotencyKey(playerId, requestId) {
   return `checkin:idempotency:${playerId}:${requestId}`;
+}
+
+function txClaimKey(txHash) {
+  return `checkin:txclaim:${String(txHash).toLowerCase()}`;
 }
 
 function nowIso() {
@@ -90,6 +95,28 @@ async function saveIdempotentResult(playerId, requestId, payload, ttlMs = 15 * 6
   });
 }
 
+async function getTxClaim(txHash) {
+  if (!txHash) return null;
+  const key = txClaimKey(txHash);
+  const redis = await db.getRedisClient();
+  if (redis) {
+    const raw = await redis.get(key);
+    return raw ? JSON.parse(raw) : null;
+  }
+  return memory.txClaims.get(key) || null;
+}
+
+async function saveTxClaim(txHash, payload, ttlMs = 365 * 24 * 60 * 60 * 1000) {
+  if (!txHash) return;
+  const key = txClaimKey(txHash);
+  const redis = await db.getRedisClient();
+  if (redis) {
+    await redis.set(key, JSON.stringify(payload), { PX: ttlMs });
+    return;
+  }
+  memory.txClaims.set(key, payload);
+}
+
 function createChallenge({ playerId, address, count }) {
   const nonce = crypto.randomUUID().replaceAll('-', '');
   const issuedAt = nowIso();
@@ -112,5 +139,7 @@ module.exports = {
   createChallenge,
   getIdempotentResult,
   getProfile,
-  saveIdempotentResult
+  getTxClaim,
+  saveIdempotentResult,
+  saveTxClaim
 };

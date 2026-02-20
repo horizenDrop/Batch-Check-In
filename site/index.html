@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Batch Check-In</title>
-  <meta name="description" content="One signature, 1/10/100 check-ins." />
+  <meta name="description" content="Onchain Base Mainnet check-ins: 1/10/100 per transaction." />
   <meta name="base:app_id" content="69974cb8654fdd1228819c73" />
   <meta property="fc:frame" content="__FC_FRAME__" />
   <link rel="stylesheet" href="/styles.css" />
@@ -15,15 +15,15 @@
       <div class="hero-glow"></div>
       <div class="hero-head">
         <span class="pill live">LIVE ON BASE</span>
-        <span class="pill neutral">One Signature Flow</span>
+        <span class="pill neutral">Onchain Tx Flow</span>
       </div>
       <h1>Batch Check-In</h1>
-      <p>Pick 1, 10, or 100. Sign once and the selected batch executes server-side.</p>
+      <p>Pick 1, 10, or 100. Each action sends a cheap Base Mainnet transaction and then credits check-ins.</p>
     </section>
 
     <section class="card state-card">
       <div class="card-head">
-        <h2>Wallet & Session</h2>
+        <h2>Wallet</h2>
         <div class="row">
           <button id="connectBtn" class="btn-primary">Connect Wallet</button>
         </div>
@@ -34,7 +34,7 @@
     <section class="card">
       <div class="card-head">
         <h2>Check-In Actions</h2>
-        <span class="caption">Each action requires one signature</span>
+        <span class="caption">Each action submits one low-cost onchain tx</span>
       </div>
       <div class="actions">
         <article class="action-card">
@@ -62,7 +62,7 @@
           <button data-count="100" class="action-btn">Run 100 Check-Ins</button>
         </article>
       </div>
-      <p class="hint">Flow: request challenge -> sign once -> execute selected batch.</p>
+      <p class="hint">Flow: send tx on Base -> wait confirmation -> credit selected batch.</p>
     </section>
 
     <section class="card">

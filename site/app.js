@@ -1,12 +1,10 @@
 const playerId = ensurePlayerId();
 const CONNECTED_FLAG_KEY = 'batch_checkin_wallet_connected';
 const LAST_ADDRESS_KEY = 'batch_checkin_last_address';
-const SESSION_TOKEN_KEY = 'batch_checkin_session_token';
 const state = {
   address: null,
   profile: null,
   busy: false,
-  sessionToken: localStorage.getItem(SESSION_TOKEN_KEY) || null,
   refreshInFlight: false
 };
 
@@ -138,59 +136,40 @@ async function runBatchCheckin(count) {
   setActionButtonsDisabled(true);
 
   try {
-    const requestId = createRequestId();
-    if (state.sessionToken) {
-      const fast = await api('/api/checkin/execute', {
-        method: 'POST',
-        body: JSON.stringify({
-          sessionToken: state.sessionToken,
-          count,
-          requestId
-        })
-      });
-      state.profile = fast.profile;
-      if (fast.sessionToken) {
-        state.sessionToken = fast.sessionToken;
-        localStorage.setItem(SESSION_TOKEN_KEY, fast.sessionToken);
-      }
-      renderState();
-      log(`Applied ${fast.applied} check-ins via session (no new signature).`);
-      return;
-    }
-
     if (!state.address) {
       await connectWalletInternal({ allowPrompt: true, source: 'action' });
       if (!state.address) throw new Error('Connect wallet first');
     }
 
-    const requestPayload = await api('/api/checkin/request', {
+    await ensureBaseMainnet();
+    const txRef = await sendCheckinTransaction();
+    let txHash = txRef.txHash || null;
+    if (txHash) {
+      log(`Onchain tx submitted: ${shortHash(txHash)}`);
+      await waitForTxReceipt(txHash);
+    } else {
+      log(`Call submitted: ${shortHash(txRef.callId)}`);
+      txHash = await waitForCallTransactionHash(txRef.callId);
+      log(`Onchain tx resolved: ${shortHash(txHash)}`);
+    }
+
+    log('Transaction confirmed on Base.');
+
+    const requestId = createRequestId();
+    const executePayload = await api('/api/checkin/onchain-execute', {
       method: 'POST',
-      body: JSON.stringify({ count, address: state.address })
-    });
-
-    const message = requestPayload.challenge.message;
-    const challengeToken = requestPayload.challenge.challengeToken;
-    log(`Challenge prepared for ${count} check-ins`);
-
-    const signature = await signMessageWithFallback(message, state.address);
-
-    const executePayload = await api('/api/checkin/execute', {
-      method: 'POST',
-      body: JSON.stringify({ challengeToken, signature, requestId })
+      body: JSON.stringify({
+        txHash,
+        count,
+        address: state.address,
+        requestId
+      })
     });
 
     state.profile = executePayload.profile;
-    if (executePayload.sessionToken) {
-      state.sessionToken = executePayload.sessionToken;
-      localStorage.setItem(SESSION_TOKEN_KEY, executePayload.sessionToken);
-    }
     renderState();
-    log(`Success: applied ${executePayload.applied} check-ins. Session enabled for next actions.`);
+    log(`Success: applied ${executePayload.applied} check-ins with onchain tx.`);
   } catch (error) {
-    if (String(error.message).toLowerCase().includes('session invalid')) {
-      clearSessionToken();
-      log('Session expired. Please sign once again.');
-    }
     log(`Batch check-in failed: ${error.message}`);
   } finally {
     state.busy = false;
@@ -198,28 +177,91 @@ async function runBatchCheckin(count) {
   }
 }
 
-async function signMessageWithFallback(message, address) {
-  const messageHex = utf8ToHex(message);
-  const attempts = [
-    [message, address],
-    [address, message],
-    [messageHex, address],
-    [address, messageHex]
+async function ensureBaseMainnet() {
+  if (!window.ethereum) throw new Error('Wallet provider not available');
+  const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+  if (String(chainId).toLowerCase() === '0x2105') return;
+
+  try {
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: '0x2105' }]
+    });
+  } catch (error) {
+    throw new Error(`Switch to Base Mainnet failed: ${error.message}`);
+  }
+}
+
+async function sendCheckinTransaction() {
+  if (!window.ethereum) throw new Error('Wallet provider not available');
+  const txParams = [
+    {
+      from: state.address,
+      to: state.address,
+      value: '0x0'
+    }
   ];
 
-  let lastError = null;
-  for (const params of attempts) {
+  try {
+    const txHash = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: txParams
+    });
+    if (!txHash) throw new Error('Transaction hash missing');
+    return { txHash };
+  } catch (error) {
     try {
-      return await window.ethereum.request({
-        method: 'personal_sign',
-        params
+      const callId = await window.ethereum.request({
+        method: 'wallet_sendCalls',
+        params: [
+          {
+            version: '1.0',
+            chainId: '0x2105',
+            from: state.address,
+            calls: [{ to: state.address, value: '0x0' }]
+          }
+        ]
       });
-    } catch (error) {
-      lastError = error;
+      if (!callId) throw new Error('wallet_sendCalls did not return id');
+      return { callId };
+    } catch {
+      throw new Error(`Unable to submit onchain tx: ${error.message}`);
     }
   }
+}
 
-  throw new Error(lastError?.message || 'Unable to sign message');
+async function waitForTxReceipt(txHash, timeoutMs = 120000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const receipt = await window.ethereum.request({
+      method: 'eth_getTransactionReceipt',
+      params: [txHash]
+    });
+    if (receipt) {
+      if (receipt.status === '0x1') return receipt;
+      throw new Error('Transaction reverted');
+    }
+    await sleep(1500);
+  }
+  throw new Error('Transaction confirmation timeout');
+}
+
+async function waitForCallTransactionHash(callId, timeoutMs = 120000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const status = await window.ethereum.request({
+      method: 'wallet_getCallsStatus',
+      params: [callId]
+    });
+
+    const receipts = status?.receipts || [];
+    const txHash = receipts[0]?.transactionHash || receipts[0]?.txHash || null;
+    const finalized = status?.status === 'CONFIRMED' || status?.status === 'confirmed';
+    if (finalized && txHash) return txHash;
+
+    await sleep(1500);
+  }
+  throw new Error('Call confirmation timeout');
 }
 
 function setActionButtonsDisabled(disabled) {
@@ -233,9 +275,9 @@ function renderState() {
   el.connectBtn.textContent = state.address ? short(state.address) : 'Connect Wallet';
   el.stateBox.innerHTML = `
     <div><b>Wallet:</b> ${state.address ? short(state.address) : 'not connected'}</div>
-    <div><b>Session:</b> ${state.sessionToken ? 'active' : 'signature required'}</div>
+    <div><b>Network:</b> Base Mainnet</div>
     <div><b>Total Check-Ins:</b> ${profile.totalCheckins}</div>
-    <div><b>Signed Actions:</b> ${profile.actions}</div>
+    <div><b>Executed Actions:</b> ${profile.actions}</div>
   `;
 }
 
@@ -256,7 +298,6 @@ function onDisconnect() {
   state.address = null;
   localStorage.removeItem(CONNECTED_FLAG_KEY);
   localStorage.removeItem(LAST_ADDRESS_KEY);
-  clearSessionToken();
   el.connectBtn.textContent = 'Connect Wallet';
   renderState();
 }
@@ -266,20 +307,16 @@ function isBaseAppContext() {
   return ua.includes('base') || ua.includes('farcaster');
 }
 
-function clearSessionToken() {
-  state.sessionToken = null;
-  localStorage.removeItem(SESSION_TOKEN_KEY);
-}
-
 function short(value) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
-function utf8ToHex(value) {
-  const bytes = new TextEncoder().encode(value);
-  let hex = '0x';
-  for (const b of bytes) hex += b.toString(16).padStart(2, '0');
-  return hex;
+function shortHash(value) {
+  return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function createRequestId() {

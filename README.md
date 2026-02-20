@@ -5,13 +5,14 @@ Mini app with 3 actions:
 - `10 check-ins`
 - `100 check-ins`
 
-Each action uses:
-1. `POST /api/checkin/request` to create a signing challenge
-2. one wallet signature (`personal_sign`)
-3. `POST /api/checkin/execute` to apply selected batch server-side
+Primary flow (current UI):
+1. Send cheap Base Mainnet transaction (self-transfer `0 ETH`)
+2. Wait for confirmation
+3. `POST /api/checkin/onchain-execute` applies selected batch after tx verification
 
 ## API
 - `GET /api/checkin/state`
+- `POST /api/checkin/onchain-execute`
 - `POST /api/checkin/request`
 - `POST /api/checkin/execute`
 - `GET /api/health`
@@ -21,7 +22,7 @@ Each action uses:
 - Uses `BASE_RPC_URL` (default `https://mainnet.base.org`) to validate contract-wallet signatures.
 
 ## Security and Reliability
-- Rate limits on challenge and execute endpoints.
+- Rate limits on challenge, execute, and onchain-execute endpoints.
 - Idempotent execute via `requestId` (safe retries without double-apply).
 - Session tokens are short-lived and rotated on every execute.
 - Structured signature verification logs are emitted server-side.
