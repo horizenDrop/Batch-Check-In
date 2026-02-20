@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Batch Check-In</title>
-  <meta name="description" content="Onchain Base Mainnet check-ins: 1/10/100 per transaction." />
+  <title>Daily Streak Lite</title>
+  <meta name="description" content="One check-in per day on Base Mainnet. Build your streak and never miss a day." />
   <meta name="base:app_id" content="69974cb8654fdd1228819c73" />
   <meta property="fc:frame" content="__FC_FRAME__" />
   <link rel="stylesheet" href="/styles.css" />
@@ -15,54 +15,38 @@
       <div class="hero-glow"></div>
       <div class="hero-head">
         <span class="pill live">LIVE ON BASE</span>
-        <span class="pill neutral">Contract Check-In</span>
+        <span class="pill neutral">Daily Streak</span>
       </div>
-      <h1>Batch Check-In</h1>
-      <p>Pick 1, 10, or 100. Each action calls the onchain check-in contract and credits exactly that batch size.</p>
-    </section>
-
-    <section class="card state-card">
-      <div class="card-head">
-        <h2>Wallet</h2>
-        <div class="row">
-          <button id="connectBtn" class="btn-primary">Connect Wallet</button>
-        </div>
-      </div>
-      <div id="stateBox" class="state-box"></div>
+      <h1>Daily Streak Lite</h1>
+      <p>One onchain check-in per day. Keep your streak alive and stack your total check-ins.</p>
     </section>
 
     <section class="card">
       <div class="card-head">
-        <h2>Check-In Actions</h2>
-        <span class="caption">Each action submits one low-cost contract transaction</span>
+        <h2>Wallet</h2>
+        <button id="connectBtn" class="btn-primary">Connect Wallet</button>
       </div>
-      <div class="actions">
-        <article class="action-card">
-          <div class="action-top">
-            <span class="action-tag">Starter</span>
-            <strong>1</strong>
-          </div>
-          <p>Quick status ping</p>
-          <button data-count="1" class="action-btn">Run 1 Check-In</button>
-        </article>
-        <article class="action-card">
-          <div class="action-top">
-            <span class="action-tag">Standard</span>
-            <strong>10</strong>
-          </div>
-          <p>Most common batch</p>
-          <button data-count="10" class="action-btn">Run 10 Check-Ins</button>
-        </article>
-        <article class="action-card">
-          <div class="action-top">
-            <span class="action-tag">Power</span>
-            <strong>100</strong>
-          </div>
-          <p>High-throughput mode</p>
-          <button data-count="100" class="action-btn">Run 100 Check-Ins</button>
-        </article>
+      <div class="wallet-row">
+        <span id="walletBadge" class="badge">Not Connected</span>
+        <span id="networkBadge" class="badge">Base Mainnet</span>
       </div>
-      <p class="hint">Flow: prepare calldata -> send contract tx -> wait confirmation -> credit event batch.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Streak Stats</h2>
+        <span id="statusBadge" class="badge badge-status">Loading...</span>
+      </div>
+      <div id="statsGrid" class="stats-grid"></div>
+    </section>
+
+    <section class="card action-card">
+      <div class="card-head">
+        <h2>Daily Action</h2>
+        <span class="caption">One transaction, one check-in</span>
+      </div>
+      <button id="checkinBtn" class="action-btn">Run Daily Check-In</button>
+      <p id="cooldownHint" class="hint">Checking wallet state...</p>
     </section>
 
     <section class="card">

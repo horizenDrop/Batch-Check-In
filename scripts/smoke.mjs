@@ -51,35 +51,32 @@ async function main() {
   const prepared = await call(checkinPrepare, {
     method: 'POST',
     headers,
-    body: {
-      count: 10
-    }
+    body: {}
   });
   assertOk(prepared, 'checkin/prepare');
-  if (prepared.payload.txRequest?.to?.toLowerCase() !== process.env.CHECKIN_CONTRACT_ADDRESS.toLowerCase()) {
+
+  const txRequest = prepared.payload.txRequest || {};
+  if (String(txRequest.to || '').toLowerCase() !== process.env.CHECKIN_CONTRACT_ADDRESS.toLowerCase()) {
     throw new Error('prepared tx must target configured contract');
   }
-  if (!String(prepared.payload.txRequest?.data || '').startsWith('0x')) {
+  if (!String(txRequest.data || '').startsWith('0x')) {
     throw new Error('prepared tx must include calldata');
   }
+  if (String(txRequest.value || '').toLowerCase() !== '0x0') {
+    throw new Error('prepared tx value should be 0x0');
+  }
 
-  const invalidPrepare = await call(checkinPrepare, {
-    method: 'POST',
-    headers,
-    body: {
-      count: 2
-    }
-  });
-  if (invalidPrepare.payload?.ok !== false || invalidPrepare.statusCode !== 400) {
-    throw new Error('invalid count should return 400');
+  const wrongMethod = await call(checkinPrepare, { method: 'GET', headers });
+  if (wrongMethod.statusCode !== 405 || wrongMethod.payload?.ok !== false) {
+    throw new Error('prepare GET should be rejected with 405');
   }
 
   const after = await call(checkinState, {
     headers: { ...headers, 'x-wallet-address': address }
   });
   assertOk(after, 'checkin/state after');
-  if (after.payload.profile.totalCheckins !== 0) {
-    throw new Error('state must not change without onchain execute');
+  if (after.payload.profile.totalCheckins !== 0 || after.payload.profile.streak !== 0) {
+    throw new Error('state must stay unchanged without onchain execute');
   }
 
   console.log(
@@ -87,9 +84,10 @@ async function main() {
       {
         ok: true,
         playerId: headers['x-player-id'],
+        app: healthResult.payload.app,
         totalCheckins: after.payload.profile.totalCheckins,
-        actions: after.payload.profile.actions,
-        contract: prepared.payload.txRequest?.to
+        streak: after.payload.profile.streak,
+        contract: txRequest.to
       },
       null,
       2

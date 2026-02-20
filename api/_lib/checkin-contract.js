@@ -1,10 +1,11 @@
 const { ethers } = require('ethers');
 
 const BASE_CHAIN_ID = 8453;
-const ALLOWED_COUNTS = new Set([1, 10, 100]);
+const DAY_SECONDS = 24 * 60 * 60;
 const CHECKIN_ABI = [
-  'function checkIn(uint256 count)',
-  'event CheckedIn(address indexed account, uint256 count)'
+  'function checkIn()',
+  'function getStats(address account) view returns (uint32 streak, uint64 totalCheckIns, uint64 lastCheckInDay, bool canCheckInNow, uint64 nextCheckInAt)',
+  'event CheckedIn(address indexed account, uint32 streak, uint64 totalCheckIns, uint64 day, uint64 nextCheckInAt)'
 ];
 
 const checkinInterface = new ethers.Interface(CHECKIN_ABI);
@@ -15,13 +16,44 @@ function getCheckinContractAddress() {
   return value;
 }
 
-function encodeCheckinCalldata(count) {
-  const numeric = Number(count);
-  if (!ALLOWED_COUNTS.has(numeric)) {
-    throw new Error('count must be 1, 10, or 100');
+function encodeCheckinCalldata() {
+  return checkinInterface.encodeFunctionData('checkIn', []);
+}
+
+function toNumber(value, fallback = 0) {
+  try {
+    if (value === null || value === undefined) return fallback;
+    return Number(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeStats(stats) {
+  if (!stats) return null;
+
+  return {
+    streak: toNumber(stats.streak, 0),
+    totalCheckins: toNumber(stats.totalCheckIns, 0),
+    lastCheckInDay: toNumber(stats.lastCheckInDay, 0),
+    canCheckInNow: Boolean(stats.canCheckInNow),
+    nextCheckInAt: toNumber(stats.nextCheckInAt, 0)
+  };
+}
+
+async function readOnchainStats(provider, contractAddress, account) {
+  if (!provider || !contractAddress || !account) return null;
+  if (!/^0x[a-f0-9]{40}$/.test(String(account).toLowerCase())) return null;
+
+  const contract = new ethers.Contract(contractAddress, CHECKIN_ABI, provider);
+  let raw = null;
+  try {
+    raw = await contract.getStats(account);
+  } catch {
+    return null;
   }
 
-  return checkinInterface.encodeFunctionData('checkIn', [numeric]);
+  return normalizeStats(raw);
 }
 
 function parseCheckinEventFromReceipt(receipt, contractAddress) {
@@ -38,13 +70,20 @@ function parseCheckinEventFromReceipt(receipt, contractAddress) {
     if (!parsed || parsed.name !== 'CheckedIn') continue;
 
     const account = String(parsed.args.account || '').toLowerCase();
-    const count = Number(parsed.args.count);
     if (!/^0x[a-f0-9]{40}$/.test(account)) continue;
-    if (!ALLOWED_COUNTS.has(count)) continue;
+
+    const streak = toNumber(parsed.args.streak, 0);
+    const totalCheckins = toNumber(parsed.args.totalCheckIns, 0);
+    const day = toNumber(parsed.args.day, 0);
+    const nextCheckInAt = toNumber(parsed.args.nextCheckInAt, 0);
 
     return {
       account,
-      count
+      streak,
+      totalCheckins,
+      day,
+      nextCheckInAt,
+      canCheckInNow: false
     };
   }
 
@@ -52,9 +91,12 @@ function parseCheckinEventFromReceipt(receipt, contractAddress) {
 }
 
 module.exports = {
-  ALLOWED_COUNTS,
   BASE_CHAIN_ID,
+  CHECKIN_ABI,
+  DAY_SECONDS,
   encodeCheckinCalldata,
   getCheckinContractAddress,
-  parseCheckinEventFromReceipt
+  normalizeStats,
+  parseCheckinEventFromReceipt,
+  readOnchainStats
 };

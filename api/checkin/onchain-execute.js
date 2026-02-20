@@ -3,7 +3,6 @@ const { badRequest, getPlayerId, json, methodGuard, readBody, tooManyRequests } 
 const { checkRateLimit } = require('../_lib/rate-limit');
 const store = require('../_lib/checkin-store');
 const {
-  ALLOWED_COUNTS,
   BASE_CHAIN_ID,
   getCheckinContractAddress,
   parseCheckinEventFromReceipt
@@ -64,11 +63,11 @@ module.exports = async function handler(req, res) {
   });
   if (!rl.allowed) return tooManyRequests(res, 'Too many onchain execute requests', rl.retryAfterMs);
 
-  const expectedCount = Number(body.count);
-  if (!ALLOWED_COUNTS.has(expectedCount)) return badRequest(res, 'count must be 1, 10, or 100');
-
   const txHash = String(body.txHash || '').trim().toLowerCase();
   if (!/^0x[a-f0-9]{64}$/.test(txHash)) return badRequest(res, 'Valid txHash is required');
+
+  const expectedAddressRaw = String(body.address || req.headers['x-wallet-address'] || '').trim().toLowerCase();
+  const expectedAddress = /^0x[a-f0-9]{40}$/.test(expectedAddressRaw) ? expectedAddressRaw : null;
 
   const contractAddress = getCheckinContractAddress();
   if (!contractAddress) {
@@ -77,8 +76,8 @@ module.exports = async function handler(req, res) {
 
   const existingClaim = await store.getTxClaim(txHash);
   if (existingClaim) {
-    if (Number(existingClaim.applied) !== expectedCount) {
-      return badRequest(res, `Transaction already claimed with count ${existingClaim.applied}`);
+    if (expectedAddress && String(existingClaim.account || '').toLowerCase() !== expectedAddress) {
+      return badRequest(res, 'Transaction already claimed by another wallet');
     }
     return json(res, 200, { ok: true, ...existingClaim, idempotent: true });
   }
@@ -97,18 +96,31 @@ module.exports = async function handler(req, res) {
     return badRequest(res, 'CheckedIn event not found in transaction receipt');
   }
 
-  if (eventData.count !== expectedCount) {
-    return badRequest(res, `Count mismatch: event has ${eventData.count}, request says ${expectedCount}`);
+  if (expectedAddress && eventData.account !== expectedAddress) {
+    return badRequest(res, 'Transaction does not belong to connected wallet');
   }
 
   const profileId = `wallet:${eventData.account}`;
-  const profile = await store.applyCheckins(profileId, eventData.count);
+  const profile = await store.applyDailyCheckin(profileId, {
+    streak: eventData.streak,
+    totalCheckins: eventData.totalCheckins,
+    day: eventData.day,
+    nextCheckInAt: eventData.nextCheckInAt,
+    txHash
+  });
 
   const responsePayload = {
-    applied: eventData.count,
+    applied: 1,
     profile,
     account: eventData.account,
     txHash,
+    onchain: {
+      streak: eventData.streak,
+      totalCheckins: eventData.totalCheckins,
+      lastCheckInDay: eventData.day,
+      nextCheckInAt: eventData.nextCheckInAt,
+      canCheckInNow: false
+    },
     tx: {
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
@@ -124,8 +136,10 @@ module.exports = async function handler(req, res) {
       playerId,
       account: eventData.account,
       txHash,
-      requestedCount: expectedCount,
-      effectiveCount: eventData.count,
+      streak: eventData.streak,
+      totalCheckins: eventData.totalCheckins,
+      day: eventData.day,
+      nextCheckInAt: eventData.nextCheckInAt,
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
       contractAddress,

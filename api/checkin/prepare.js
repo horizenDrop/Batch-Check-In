@@ -1,6 +1,5 @@
-const { badRequest, json, methodGuard, readBody } = require('../_lib/http');
+const { json, methodGuard } = require('../_lib/http');
 const {
-  ALLOWED_COUNTS,
   BASE_CHAIN_ID,
   encodeCheckinCalldata,
   getCheckinContractAddress
@@ -9,18 +8,12 @@ const {
 module.exports = async function handler(req, res) {
   if (!methodGuard(req, res, 'POST')) return;
 
-  const body = await readBody(req);
-  const count = Number(body.count);
-  if (!ALLOWED_COUNTS.has(count)) {
-    return badRequest(res, 'count must be 1, 10, or 100');
-  }
-
   const contractAddress = getCheckinContractAddress();
   if (!contractAddress) {
     return json(res, 500, { ok: false, error: 'CHECKIN_CONTRACT_ADDRESS is not configured' });
   }
 
-  const data = encodeCheckinCalldata(count);
+  const data = encodeCheckinCalldata();
   return json(res, 200, {
     ok: true,
     txRequest: {

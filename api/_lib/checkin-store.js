@@ -1,4 +1,5 @@
 const db = require('./state');
+const { DAY_SECONDS } = require('./checkin-contract');
 
 const memory = {
   profiles: new Map(),
@@ -17,11 +18,29 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function unixToIso(seconds) {
+  const value = Number(seconds || 0);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return new Date(value * 1000).toISOString();
+}
+
+function dayToIso(day) {
+  const numeric = Number(day || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return unixToIso(numeric * DAY_SECONDS);
+}
+
 function defaultProfile(subjectId) {
   return {
     subjectId,
+    streak: 0,
     totalCheckins: 0,
     actions: 0,
+    lastCheckInDay: 0,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
+    canCheckInNow: true,
+    lastTxHash: null,
     updatedAt: nowIso()
   };
 }
@@ -51,11 +70,47 @@ async function saveProfile(profile) {
   return next;
 }
 
-async function applyCheckins(subjectId, count) {
+async function applyDailyCheckin(subjectId, eventData) {
   const current = await getProfile(subjectId);
-  current.totalCheckins += count;
-  current.actions += 1;
-  return saveProfile(current);
+  const next = {
+    ...current,
+    streak: Number(eventData.streak || 0),
+    totalCheckins: Number(eventData.totalCheckins || 0),
+    actions: current.actions + 1,
+    lastCheckInDay: Number(eventData.day || 0),
+    lastCheckInAt: dayToIso(eventData.day),
+    nextCheckInAt: unixToIso(eventData.nextCheckInAt),
+    canCheckInNow: false,
+    lastTxHash: eventData.txHash || current.lastTxHash
+  };
+
+  return saveProfile(next);
+}
+
+async function syncFromOnchain(subjectId, onchainStats) {
+  if (!onchainStats) return getProfile(subjectId);
+
+  const current = await getProfile(subjectId);
+  const next = {
+    ...current,
+    streak: Number(onchainStats.streak || 0),
+    totalCheckins: Number(onchainStats.totalCheckins || 0),
+    lastCheckInDay: Number(onchainStats.lastCheckInDay || 0),
+    lastCheckInAt: dayToIso(onchainStats.lastCheckInDay),
+    nextCheckInAt: unixToIso(onchainStats.nextCheckInAt),
+    canCheckInNow: Boolean(onchainStats.canCheckInNow)
+  };
+
+  const unchanged =
+    next.streak === current.streak &&
+    next.totalCheckins === current.totalCheckins &&
+    next.lastCheckInDay === current.lastCheckInDay &&
+    next.lastCheckInAt === current.lastCheckInAt &&
+    next.nextCheckInAt === current.nextCheckInAt &&
+    next.canCheckInNow === current.canCheckInNow;
+
+  if (unchanged) return current;
+  return saveProfile(next);
 }
 
 async function getTxClaim(txHash) {
@@ -81,8 +136,9 @@ async function saveTxClaim(txHash, payload, ttlMs = 365 * 24 * 60 * 60 * 1000) {
 }
 
 module.exports = {
-  applyCheckins,
+  applyDailyCheckin,
   getProfile,
   getTxClaim,
+  syncFromOnchain,
   saveTxClaim
 };

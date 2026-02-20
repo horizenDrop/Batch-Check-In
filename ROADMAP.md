@@ -1,11 +1,12 @@
-# Batch Check-In Roadmap
+# Daily Streak Lite Roadmap
 
 ## Current Scope
-- One-page app with 3 buttons: `1`, `10`, `100`.
-- One Base Mainnet contract transaction per selected batch.
-- Backend verifies `CheckedIn(account,count)` event from receipt before applying.
+- One-page Base mini app with one onchain action: `Run Daily Check-In`.
+- Contract-level streak rules (one check-in per UTC day).
+- Backend verifies `CheckedIn` event before updating profile.
+- Auto-refresh state and mobile-first UI.
 
 ## Next
-1. Deploy and pin `BatchCheckIn` contract address in production env.
-2. Add transaction history panel (latest successful tx hashes).
-3. Add optional relayer mode (gasless UX) if needed.
+1. Add lightweight weekly leaderboard (offchain ranking by streak and total).
+2. Add cosmetic badge tiers (7-day, 30-day, 100-day streak).
+3. Add optional relayer mode for sponsored gas campaigns.
