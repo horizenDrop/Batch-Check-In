@@ -18,39 +18,42 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function defaultProfile(playerId) {
+function defaultProfile(subjectId) {
   return {
-    playerId,
+    subjectId,
     totalCheckins: 0,
     actions: 0,
     updatedAt: nowIso()
   };
 }
 
-async function getProfile(playerId) {
+async function getProfile(subjectId) {
   const redis = await db.getRedisClient();
   if (redis) {
-    const raw = await redis.get(profileKey(playerId));
-    return raw ? JSON.parse(raw) : defaultProfile(playerId);
+    const raw = await redis.get(profileKey(subjectId));
+    return raw ? JSON.parse(raw) : defaultProfile(subjectId);
   }
 
-  return memory.profiles.get(playerId) || defaultProfile(playerId);
+  return memory.profiles.get(subjectId) || defaultProfile(subjectId);
 }
 
 async function saveProfile(profile) {
-  const next = { ...profile, updatedAt: nowIso() };
+  const subjectId = profile.subjectId || profile.playerId;
+  if (!subjectId) throw new Error('Profile subjectId is required');
+
+  const next = { ...profile, subjectId, updatedAt: nowIso() };
   const redis = await db.getRedisClient();
   if (redis) {
-    await redis.set(profileKey(profile.playerId), JSON.stringify(next));
+    await redis.set(profileKey(subjectId), JSON.stringify(next));
     return next;
   }
 
-  memory.profiles.set(profile.playerId, next);
+  memory.profiles.set(subjectId, next);
   return next;
 }
 
-async function applyCheckins(playerId, count) {
-  const current = await getProfile(playerId);
+async function applyCheckins(subjectId, count) {
+  const current = await getProfile(subjectId);
   current.totalCheckins += count;
   current.actions += 1;
   return saveProfile(current);

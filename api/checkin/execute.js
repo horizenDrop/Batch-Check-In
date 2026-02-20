@@ -54,10 +54,11 @@ module.exports = async function handler(req, res) {
     const count = Number(body.count);
     if (!ALLOWED_COUNTS.has(count)) return badRequest(res, 'count must be 1, 10, or 100');
 
-    const profile = await store.applyCheckins(playerId, count);
+    const profile = await store.applyCheckins(session.profileId, count);
     const rotatedSessionToken = createSessionToken({
       playerId,
-      address: session.address
+      address: session.address,
+      profileId: session.profileId
     });
 
     const responsePayload = {
@@ -117,10 +118,12 @@ module.exports = async function handler(req, res) {
 
   if (!verifyResult.valid) return badRequest(res, 'Invalid signature');
 
-  const profile = await store.applyCheckins(playerId, challengePayload.count);
+  const profileId = `wallet:${String(challengePayload.address).toLowerCase()}`;
+  const profile = await store.applyCheckins(profileId, challengePayload.count);
   const nextSessionToken = createSessionToken({
     playerId,
-    address: challengePayload.address
+    address: challengePayload.address,
+    profileId
   });
 
   const responsePayload = {

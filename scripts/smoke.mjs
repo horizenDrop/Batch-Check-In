@@ -34,7 +34,9 @@ async function main() {
   const headers = { 'x-player-id': `smoke_${Date.now()}` };
   const address = '0x1111111111111111111111111111111111111111';
 
-  const before = await call(checkinState, { headers });
+  const before = await call(checkinState, {
+    headers: { ...headers, 'x-wallet-address': address }
+  });
   assertOk(before, 'checkin/state before');
   if (before.payload.profile.totalCheckins !== 0) {
     throw new Error('initial totalCheckins should be 0');
@@ -101,7 +103,9 @@ async function main() {
     throw new Error('replay should be marked idempotent');
   }
 
-  const after = await call(checkinState, { headers });
+  const after = await call(checkinState, {
+    headers: { ...headers, 'x-wallet-address': address }
+  });
   assertOk(after, 'checkin/state after');
   if (after.payload.profile.totalCheckins !== 110) {
     throw new Error('totalCheckins should be 110 after signed+session executes');

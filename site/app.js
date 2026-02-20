@@ -55,6 +55,7 @@ async function api(path, options = {}) {
     headers: {
       'content-type': 'application/json',
       'x-player-id': playerId,
+      ...(state.address ? { 'x-wallet-address': state.address } : {}),
       ...(options.headers || {})
     }
   });
@@ -106,6 +107,7 @@ async function connectWalletInternal({ allowPrompt, source }) {
     localStorage.setItem(LAST_ADDRESS_KEY, address);
     el.connectBtn.textContent = short(address);
     renderState();
+    refreshState({ silent: true });
     log(`Wallet connected (${source}): ${short(state.address)}`);
     return address;
   } catch (error) {
