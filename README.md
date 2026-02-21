@@ -11,6 +11,9 @@ One simple loop:
 - `POST /api/streak/onchain-execute`: verifies tx receipt + `CheckedIn` event
 - `GET /api/streak/state`: returns wallet profile (with optional onchain sync)
 - `GET /api/health`: returns app status + Redis connectivity status
+- `POST /api/analytics/track`: receives offchain client analytics events
+- `POST /api/webhook`: receives Base/Farcaster webhook events for analytics
+- `GET /api/analytics/state`: returns aggregated analytics counters + recent events
 
 Legacy aliases `/api/checkin/*` remain for backward compatibility.
 

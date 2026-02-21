@@ -1,4 +1,6 @@
 import health from '../api/health.js';
+import analyticsState from '../api/analytics/state.js';
+import analyticsTrack from '../api/analytics/track.js';
 import streakState from '../api/streak/state.js';
 import streakPrepare from '../api/streak/prepare.js';
 
@@ -39,6 +41,26 @@ async function main() {
 
   const healthResult = await call(health);
   assertOk(healthResult, 'health');
+
+  const tracked = await call(analyticsTrack, {
+    method: 'POST',
+    headers,
+    body: {
+      event: 'smoke_ping',
+      source: 'smoke_test',
+      payload: { test: true }
+    }
+  });
+  assertOk(tracked, 'analytics/track');
+
+  const analytics = await call(analyticsState, {
+    method: 'GET',
+    query: { limit: 5 }
+  });
+  assertOk(analytics, 'analytics/state');
+  if (!analytics.payload.summary?.byEvent?.smoke_ping) {
+    throw new Error('analytics event smoke_ping was not stored');
+  }
 
   const before = await call(streakState, {
     headers: { ...headers, 'x-wallet-address': address }
@@ -85,6 +107,7 @@ async function main() {
         ok: true,
         playerId: headers['x-player-id'],
         app: healthResult.payload.app,
+        analyticsEvents: analytics.payload.summary.byEvent.smoke_ping,
         totalCheckins: after.payload.profile.totalCheckins,
         streak: after.payload.profile.streak,
         contract: txRequest.to

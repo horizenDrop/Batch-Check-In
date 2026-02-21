@@ -1,6 +1,7 @@
 const playerId = ensurePlayerId();
 const CONNECTED_FLAG_KEY = 'daily_streak_wallet_connected';
 const LAST_ADDRESS_KEY = 'daily_streak_last_address';
+const ANALYTICS_ENDPOINT = '/api/analytics/track';
 const state = {
   address: null,
   lastKnownAddress: getLastKnownAddress(),
@@ -25,6 +26,9 @@ init();
 
 function init() {
   bindEvents();
+  trackEvent('session_start', {
+    baseAppContext: isBaseAppContext()
+  });
   autoConnectWallet();
   renderState();
   refreshState();
@@ -131,10 +135,17 @@ async function connectWalletInternal({ allowPrompt, source }) {
     localStorage.setItem(LAST_ADDRESS_KEY, state.address);
     renderState();
     refreshState({ silent: true });
+    trackEvent('wallet_connected', { source });
     log(`Wallet connected (${source}): ${short(state.address)}`);
     return state.address;
   } catch (error) {
-    if (allowPrompt) log(`Connect failed: ${error.message}`);
+    if (allowPrompt) {
+      trackEvent('wallet_connect_failed', {
+        source,
+        reason: safeErrorMessage(error)
+      });
+      log(`Connect failed: ${error.message}`);
+    }
     return null;
   }
 }
@@ -168,8 +179,10 @@ async function refreshState(options = {}) {
 
 async function runDailyCheckin() {
   if (state.busy) return;
+  trackEvent('checkin_attempt', { phase: 'start' });
   await refreshState({ silent: true });
   if (!isReadyNow()) {
+    trackEvent('checkin_blocked', { reason: 'cooldown_before_prepare' });
     log('Daily check-in is still on cooldown.');
     return;
   }
@@ -186,6 +199,7 @@ async function runDailyCheckin() {
     await ensureBaseMainnet();
     await refreshState({ silent: true });
     if (!isReadyNow()) {
+      trackEvent('checkin_blocked', { reason: 'cooldown_after_refresh' });
       log('Daily check-in is on cooldown after state refresh.');
       return;
     }
@@ -197,14 +211,18 @@ async function runDailyCheckin() {
     const txRef = await sendCheckinTransaction(prepared.txRequest);
     let txHash = txRef.txHash || null;
     if (txHash) {
+      trackEvent('checkin_tx_submitted', { mode: 'eth_sendTransaction', txHash: shortHash(txHash) });
       log(`Onchain tx submitted: ${shortHash(txHash)}`);
       await waitForTxReceipt(txHash);
     } else {
+      trackEvent('checkin_tx_submitted', { mode: 'wallet_sendCalls', callId: shortHash(txRef.callId) });
       log(`Call submitted: ${shortHash(txRef.callId)}`);
       txHash = await waitForCallTransactionHash(txRef.callId);
+      trackEvent('checkin_tx_resolved', { txHash: shortHash(txHash) });
       log(`Onchain tx resolved: ${shortHash(txHash)}`);
     }
 
+    trackEvent('checkin_tx_confirmed', { txHash: shortHash(txHash) });
     log('Transaction confirmed on Base.');
 
     const executePayload = await api('/api/streak/onchain-execute', {
@@ -217,8 +235,13 @@ async function runDailyCheckin() {
 
     state.profile = executePayload.profile || state.profile;
     renderState();
+    trackEvent('checkin_success', {
+      streak: state.profile?.streak || 0,
+      totalCheckins: state.profile?.totalCheckins || 0
+    });
     log(`Success: streak ${state.profile?.streak || 0}, total ${state.profile?.totalCheckins || 0}.`);
   } catch (error) {
+    trackEvent('checkin_failed', { reason: safeErrorMessage(error) });
     log(`Daily check-in failed: ${error.message}`);
   } finally {
     state.busy = false;
@@ -426,11 +449,13 @@ function onAccountsChanged(accounts) {
   state.lastKnownAddress = state.address;
   localStorage.setItem(CONNECTED_FLAG_KEY, '1');
   localStorage.setItem(LAST_ADDRESS_KEY, state.address);
+  trackEvent('wallet_changed', { address: short(state.address) });
   renderState();
   refreshState({ silent: true });
 }
 
 function onDisconnect() {
+  trackEvent('wallet_disconnected', {});
   state.address = null;
   localStorage.removeItem(CONNECTED_FLAG_KEY);
   renderState();
@@ -486,4 +511,30 @@ function sleep(ms) {
 
 function log(message) {
   console.log(`[daily-streak] ${message}`);
+}
+
+function safeErrorMessage(error) {
+  const message = String(error?.message || 'unknown_error');
+  return message.slice(0, 180);
+}
+
+function trackEvent(event, payload = {}) {
+  const body = {
+    event,
+    source: 'client_ui',
+    playerId,
+    address: state.address || state.lastKnownAddress || null,
+    payload
+  };
+
+  fetch(ANALYTICS_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-player-id': playerId,
+      ...(state.address ? { 'x-wallet-address': state.address } : {})
+    },
+    body: JSON.stringify(body),
+    keepalive: true
+  }).catch(() => {});
 }
