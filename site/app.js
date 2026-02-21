@@ -7,6 +7,7 @@ const state = {
   profile: null,
   busy: false,
   refreshInFlight: false,
+  refreshQueued: false,
   profileHydrated: false
 };
 
@@ -141,7 +142,10 @@ async function connectWalletInternal({ allowPrompt, source }) {
 
 async function refreshState(options = {}) {
   const { silent = false } = options;
-  if (state.refreshInFlight) return;
+  if (state.refreshInFlight) {
+    state.refreshQueued = true;
+    return null;
+  }
   state.refreshInFlight = true;
   try {
     const payload = await api('/api/streak/state');
@@ -154,6 +158,12 @@ async function refreshState(options = {}) {
     return null;
   } finally {
     state.refreshInFlight = false;
+    if (state.refreshQueued) {
+      state.refreshQueued = false;
+      setTimeout(() => {
+        refreshState({ silent: true });
+      }, 0);
+    }
   }
 }
 
