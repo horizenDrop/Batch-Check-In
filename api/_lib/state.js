@@ -32,18 +32,33 @@ function buildRedisUrlCandidates(rawValue) {
 }
 
 async function connectRedis(candidates) {
+  function withTimeout(promise, timeoutMs) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('redis_connect_timeout')), timeoutMs);
+      })
+    ]);
+  }
+
   let lastError = null;
 
   for (const url of candidates) {
-    const client = createClient({ url });
+    const client = createClient({
+      url,
+      socket: {
+        connectTimeout: 5000,
+        reconnectStrategy: () => false
+      }
+    });
     client.on('error', () => {});
     try {
-      await client.connect();
+      await withTimeout(client.connect(), 7000);
       return client;
     } catch (error) {
       lastError = error;
       try {
-        await client.disconnect();
+        client.disconnect();
       } catch {
         // best effort cleanup
       }
