@@ -12,17 +12,21 @@ async function checkRateLimit({ scope, key, limit, windowMs }) {
   const redis = await state.getRedisClient();
 
   if (redis) {
-    const redisKey = `rl:${scope}:${key}:${bucket}`;
-    const count = await redis.incr(redisKey);
-    if (count === 1) {
-      await redis.pexpire(redisKey, windowMs);
+    try {
+      const redisKey = `rl:${scope}:${key}:${bucket}`;
+      const count = await redis.incr(redisKey);
+      if (count === 1) {
+        await redis.pexpire(redisKey, windowMs);
+      }
+      return {
+        allowed: count <= limit,
+        count,
+        remaining: Math.max(0, limit - count),
+        retryAfterMs: windowMs
+      };
+    } catch {
+      // fallback to in-memory limiter when Redis operations fail
     }
-    return {
-      allowed: count <= limit,
-      count,
-      remaining: Math.max(0, limit - count),
-      retryAfterMs: windowMs
-    };
   }
 
   const keyMem = memoryKey(scope, key, bucket);
