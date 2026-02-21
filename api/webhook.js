@@ -1,6 +1,7 @@
 const { json, methodGuard, readBody } = require('./_lib/http');
 const analytics = require('./_lib/analytics-store');
 const { normalizeAddress } = require('./_lib/evm');
+const { verifyAppOrigin } = require('./_lib/app-origin');
 
 function getRequestId(req) {
   return String(req.headers['x-request-id'] || req.headers['x-vercel-id'] || '').trim() || null;
@@ -22,6 +23,23 @@ module.exports = async function handler(req, res) {
   if (!methodGuard(req, res, 'POST')) return;
 
   try {
+    const origin = verifyAppOrigin(req);
+    if (!origin.ok) {
+      console.warn(
+        JSON.stringify({
+          event: 'webhook.forbidden_host',
+          requestHost: origin.requestHost,
+          allowedHosts: origin.allowedHosts
+        })
+      );
+      return json(res, 403, {
+        ok: false,
+        error: 'Forbidden host',
+        requestHost: origin.requestHost,
+        allowedHosts: origin.allowedHosts
+      });
+    }
+
     const body = await readBody(req);
     const eventName = analytics.sanitizeEventName(inferWebhookEvent(req, body)) || 'base_webhook';
     const walletAddress = normalizeAddress(

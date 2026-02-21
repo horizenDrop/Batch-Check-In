@@ -26,6 +26,7 @@ One simple loop:
 
 ## Environment
 - `APP_URL=https://daily-streak-lite.vercel.app`
+- `ALLOWED_APP_HOSTS=daily-streak-lite.vercel.app` (optional allow-list for API host protection)
 - `BASE_RPC_URL=https://mainnet.base.org`
 - `CHECKIN_CONTRACT_ADDRESS=0x...` (deployed `DailyStreakLite` on Base Mainnet)
 - `REDIS_URL=redis://...` or `REDIS_URL=rediss://...` (optional, for persistent storage)
