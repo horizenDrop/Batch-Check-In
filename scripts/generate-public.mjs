@@ -16,7 +16,7 @@ const frameObject = {
   button: {
     title: "Open Daily Streak",
     action: {
-      type: "launch_frame",
+      type: "launch_miniapp",
       name: "Daily Streak Lite",
       url: appUrl,
       splashBackgroundColor: "#0b1220"

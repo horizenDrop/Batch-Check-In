@@ -4,7 +4,7 @@
     "payload": "eyJkb21haW4iOiJkYWlseS1zdHJlYWstbGl0ZS52ZXJjZWwuYXBwIn0",
     "signature": "5GFs0+JgzHTv4qdlJcU4+LBXMnfY+jiJvJAYQV5JcgJf7G52m+7A/wX9eqyqtLbI+hqrdI//1OgcWkGeNjkjWxs="
   },
-  "frame": {
+  "miniapp": {
     "version": "1",
     "name": "Daily Streak Lite",
     "iconUrl": "https://daily-streak-lite.vercel.app/og.svg",

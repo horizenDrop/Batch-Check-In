@@ -32,6 +32,7 @@ function init() {
   trackEvent('session_start', {
     baseAppContext: isBaseAppContext()
   });
+  notifyMiniAppReady();
   autoConnectWallet();
   renderState();
   refreshState();
@@ -549,6 +550,47 @@ function sleep(ms) {
 
 function log(message) {
   console.log(`[daily-streak] ${message}`);
+}
+
+async function notifyMiniAppReady(attempt = 0) {
+  const sdkRef = getMiniAppSdk();
+  if (sdkRef?.actions?.ready) {
+    try {
+      await sdkRef.actions.ready();
+      trackEvent('miniapp_ready_sent', {
+        sdkProvider: sdkRef.provider || 'global',
+        attempt
+      });
+      return true;
+    } catch (error) {
+      if (attempt >= 8) {
+        trackEvent('miniapp_ready_failed', { reason: safeErrorMessage(error) });
+        return false;
+      }
+    }
+  }
+
+  if (attempt >= 8) return false;
+  await sleep(300);
+  return notifyMiniAppReady(attempt + 1);
+}
+
+function getMiniAppSdk() {
+  const candidates = [
+    { provider: 'miniapp.sdk', sdk: globalThis?.miniapp?.sdk },
+    { provider: 'frame.sdk', sdk: globalThis?.frame?.sdk },
+    { provider: 'farcaster.sdk', sdk: globalThis?.farcaster?.sdk },
+    { provider: 'fc.sdk', sdk: globalThis?.fc?.sdk },
+    { provider: 'window.sdk', sdk: globalThis?.sdk }
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.sdk?.actions?.ready && typeof candidate.sdk.actions.ready === 'function') {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 function safeErrorMessage(error) {
