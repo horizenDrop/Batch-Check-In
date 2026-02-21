@@ -15,8 +15,6 @@ One simple loop:
 - `POST /api/webhook`: receives Base/Farcaster webhook events for analytics
 - `GET /api/analytics/state`: returns aggregated analytics counters + recent events
 
-Legacy aliases `/api/checkin/*` remain for backward compatibility.
-
 ## Contract
 - Source: `contracts/DailyStreakLite.sol`
 - Main function:
