@@ -3,6 +3,7 @@ const { checkRateLimit } = require('../_lib/rate-limit');
 const store = require('../_lib/checkin-store');
 const { normalizeAddress, normalizeTxHash } = require('../_lib/evm');
 const { getBaseProvider } = require('../_lib/base-provider');
+const { verifyAppOrigin } = require('../_lib/app-origin');
 const {
   BASE_CHAIN_ID,
   getCheckinContractAddress,
@@ -44,6 +45,27 @@ module.exports = async function handler(req, res) {
   if (!methodGuard(req, res, 'POST')) return;
 
   try {
+    const origin = verifyAppOrigin(req);
+    if (!origin.ok) {
+      console.warn(
+        JSON.stringify({
+          event: 'streak.execute.forbidden_host',
+          requestHost: origin.requestHost,
+          originHost: origin.originHost,
+          refererHost: origin.refererHost,
+          allowedHosts: origin.allowedHosts
+        })
+      );
+      return json(res, 403, {
+        ok: false,
+        error: 'Forbidden host',
+        requestHost: origin.requestHost,
+        originHost: origin.originHost,
+        refererHost: origin.refererHost,
+        allowedHosts: origin.allowedHosts
+      });
+    }
+
     const body = await readBody(req);
     const playerId = getPlayerId(req, body);
     if (!playerId) return badRequest(res, 'playerId is required');
@@ -96,7 +118,7 @@ module.exports = async function handler(req, res) {
       const rpc = getBaseProvider();
       const { tx, receipt } = await waitForBaseVisibility(rpc, txHash);
       if (!receipt) return badRequest(res, 'Transaction not visible on Base RPC yet. Retry in a few seconds.');
-      if (receipt.status !== 1) return badRequest(res, 'Transaction failed');
+      if (Number(receipt.status) !== 1) return badRequest(res, 'Transaction failed');
 
       if (tx && Number(tx.chainId || BASE_CHAIN_ID) !== BASE_CHAIN_ID) {
         return badRequest(res, 'Transaction must be on Base Mainnet');
@@ -133,8 +155,8 @@ module.exports = async function handler(req, res) {
           canCheckInNow: false
         },
         tx: {
-          blockNumber: receipt.blockNumber,
-          gasUsed: receipt.gasUsed.toString(),
+          blockNumber: Number(receipt.blockNumber || 0),
+          gasUsed: receipt.gasUsed?.toString?.() || null,
           feeWei: receipt.fee?.toString?.() || null
         }
       };
@@ -151,8 +173,8 @@ module.exports = async function handler(req, res) {
           totalCheckins: eventData.totalCheckins,
           day: eventData.day,
           nextCheckInAt: eventData.nextCheckInAt,
-          blockNumber: receipt.blockNumber,
-          gasUsed: receipt.gasUsed.toString(),
+          blockNumber: Number(receipt.blockNumber || 0),
+          gasUsed: receipt.gasUsed?.toString?.() || null,
           contractAddress,
           timestamp: new Date().toISOString()
         })

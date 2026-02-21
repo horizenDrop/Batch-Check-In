@@ -6,6 +6,7 @@ const memory = {
   txClaims: new Map(),
   txLocks: new Map()
 };
+let memoryOps = 0;
 
 function safeJsonParse(raw) {
   if (!raw) return null;
@@ -30,6 +31,30 @@ function txLockKey(txHash) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function cleanupMemory() {
+  const now = Date.now();
+
+  for (const [key, expiresAt] of memory.txLocks.entries()) {
+    if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+      memory.txLocks.delete(key);
+    }
+  }
+
+  for (const [key, entry] of memory.txClaims.entries()) {
+    const expiresAt = Number(entry?.expiresAt || 0);
+    if (!expiresAt || expiresAt <= now) {
+      memory.txClaims.delete(key);
+    }
+  }
+}
+
+function touchMemory() {
+  memoryOps += 1;
+  if (memoryOps % 128 === 0) {
+    cleanupMemory();
+  }
 }
 
 function toFiniteNumber(value, fallback = 0) {
@@ -193,6 +218,7 @@ async function acquireTxLock(txHash, ttlMs = 60 * 1000) {
   const existing = memory.txLocks.get(key);
   if (existing && existing > now) return false;
   memory.txLocks.set(key, now + ttlMs);
+  touchMemory();
   return true;
 }
 
@@ -209,6 +235,7 @@ async function releaseTxLock(txHash) {
     }
   }
   memory.txLocks.delete(key);
+  touchMemory();
 }
 
 async function getTxClaim(txHash) {
@@ -224,7 +251,19 @@ async function getTxClaim(txHash) {
       // fallback to memory when Redis read fails
     }
   }
-  return memory.txClaims.get(key) || null;
+  const entry = memory.txClaims.get(key);
+  if (!entry) return null;
+
+  if (entry && typeof entry === 'object' && 'payload' in entry) {
+    const expiresAt = Number(entry.expiresAt || 0);
+    if (!expiresAt || expiresAt <= Date.now()) {
+      memory.txClaims.delete(key);
+      return null;
+    }
+    return entry.payload || null;
+  }
+
+  return entry || null;
 }
 
 async function saveTxClaim(txHash, payload, ttlMs = 365 * 24 * 60 * 60 * 1000) {
@@ -239,7 +278,11 @@ async function saveTxClaim(txHash, payload, ttlMs = 365 * 24 * 60 * 60 * 1000) {
       // continue with memory fallback
     }
   }
-  memory.txClaims.set(key, payload);
+  memory.txClaims.set(key, {
+    payload,
+    expiresAt: Date.now() + ttlMs
+  });
+  touchMemory();
 }
 
 module.exports = {

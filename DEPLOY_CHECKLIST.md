@@ -6,6 +6,7 @@
 
 ## Environment
 - `APP_URL` points to production URL.
+- `ALLOWED_APP_HOSTS` contains your production host (for example `daily-streak-lite.vercel.app`).
 - `BASE_RPC_URL` points to Base Mainnet RPC.
 - `CHECKIN_CONTRACT_ADDRESS` points to deployed `DailyStreakLite` contract.
 - `REDIS_URL` is optional but recommended for persistence.

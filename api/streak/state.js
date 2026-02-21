@@ -2,12 +2,34 @@ const { badRequest, getPlayerId, json, methodGuard } = require('../_lib/http');
 const { getCheckinContractAddress, readOnchainStats } = require('../_lib/checkin-contract');
 const { normalizeAddress } = require('../_lib/evm');
 const { getBaseProvider } = require('../_lib/base-provider');
+const { verifyAppOrigin } = require('../_lib/app-origin');
 const store = require('../_lib/checkin-store');
 
 module.exports = async function handler(req, res) {
   if (!methodGuard(req, res, 'GET')) return;
 
   try {
+    const origin = verifyAppOrigin(req);
+    if (!origin.ok) {
+      console.warn(
+        JSON.stringify({
+          event: 'streak.state.forbidden_host',
+          requestHost: origin.requestHost,
+          originHost: origin.originHost,
+          refererHost: origin.refererHost,
+          allowedHosts: origin.allowedHosts
+        })
+      );
+      return json(res, 403, {
+        ok: false,
+        error: 'Forbidden host',
+        requestHost: origin.requestHost,
+        originHost: origin.originHost,
+        refererHost: origin.refererHost,
+        allowedHosts: origin.allowedHosts
+      });
+    }
+
     const playerId = getPlayerId(req, {});
     if (!playerId) return badRequest(res, 'playerId is required');
 

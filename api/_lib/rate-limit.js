@@ -1,9 +1,23 @@
 const state = require('./state');
 
 const memoryCounters = new Map();
+let memoryOps = 0;
 
 function memoryKey(scope, key, bucket) {
   return `${scope}:${key}:${bucket}`;
+}
+
+function cleanupMemoryCounters(currentBucket) {
+  // Keep current and previous bucket only to avoid unbounded in-memory growth.
+  for (const key of memoryCounters.keys()) {
+    const lastColon = key.lastIndexOf(':');
+    if (lastColon < 0) continue;
+    const bucket = Number(key.slice(lastColon + 1));
+    if (!Number.isFinite(bucket)) continue;
+    if (bucket < currentBucket - 1) {
+      memoryCounters.delete(key);
+    }
+  }
 }
 
 async function checkRateLimit({ scope, key, limit, windowMs }) {
@@ -33,6 +47,11 @@ async function checkRateLimit({ scope, key, limit, windowMs }) {
   const current = memoryCounters.get(keyMem) || 0;
   const count = current + 1;
   memoryCounters.set(keyMem, count);
+  memoryOps += 1;
+
+  if (memoryOps % 128 === 0) {
+    cleanupMemoryCounters(bucket);
+  }
 
   return {
     allowed: count <= limit,

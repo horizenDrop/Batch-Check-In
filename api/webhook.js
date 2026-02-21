@@ -29,6 +29,8 @@ module.exports = async function handler(req, res) {
         JSON.stringify({
           event: 'webhook.forbidden_host',
           requestHost: origin.requestHost,
+          originHost: origin.originHost,
+          refererHost: origin.refererHost,
           allowedHosts: origin.allowedHosts
         })
       );
@@ -36,6 +38,8 @@ module.exports = async function handler(req, res) {
         ok: false,
         error: 'Forbidden host',
         requestHost: origin.requestHost,
+        originHost: origin.originHost,
+        refererHost: origin.refererHost,
         allowedHosts: origin.allowedHosts
       });
     }
