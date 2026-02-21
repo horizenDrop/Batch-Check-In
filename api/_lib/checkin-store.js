@@ -32,14 +32,35 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function toFiniteNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return numeric;
+}
+
+function toBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return fallback;
+}
+
+function normalizeIsoOrNull(value) {
+  if (!value) return null;
+  const iso = String(value);
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return null;
+  return new Date(ts).toISOString();
+}
+
 function unixToIso(seconds) {
-  const value = Number(seconds || 0);
+  const value = toFiniteNumber(seconds, 0);
   if (!Number.isFinite(value) || value <= 0) return null;
   return new Date(value * 1000).toISOString();
 }
 
 function dayToIso(day) {
-  const numeric = Number(day || 0);
+  const numeric = toFiniteNumber(day, 0);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
   return unixToIso(numeric * DAY_SECONDS);
 }
@@ -58,27 +79,46 @@ function defaultProfile(subjectId) {
   };
 }
 
+function normalizeProfile(subjectId, profile) {
+  const base = defaultProfile(subjectId);
+  if (!profile || typeof profile !== 'object') return base;
+
+  return {
+    ...base,
+    ...profile,
+    subjectId,
+    streak: Math.max(0, Math.floor(toFiniteNumber(profile.streak, base.streak))),
+    totalCheckins: Math.max(0, Math.floor(toFiniteNumber(profile.totalCheckins, base.totalCheckins))),
+    lastCheckInDay: Math.max(0, Math.floor(toFiniteNumber(profile.lastCheckInDay, base.lastCheckInDay))),
+    lastCheckInAt: normalizeIsoOrNull(profile.lastCheckInAt),
+    nextCheckInAt: normalizeIsoOrNull(profile.nextCheckInAt),
+    canCheckInNow: toBoolean(profile.canCheckInNow, base.canCheckInNow),
+    lastTxHash: profile.lastTxHash ? String(profile.lastTxHash).toLowerCase() : null,
+    updatedAt: normalizeIsoOrNull(profile.updatedAt) || nowIso()
+  };
+}
+
 async function getProfile(subjectId) {
   const redis = await db.getRedisClient();
   if (redis) {
     try {
       const raw = await redis.get(profileKey(subjectId));
       const parsed = safeJsonParse(raw);
-      return parsed || defaultProfile(subjectId);
+      return normalizeProfile(subjectId, parsed);
     } catch {
       // fallback to in-memory profile on Redis read issues
-      return memory.profiles.get(subjectId) || defaultProfile(subjectId);
+      return normalizeProfile(subjectId, memory.profiles.get(subjectId));
     }
   }
 
-  return memory.profiles.get(subjectId) || defaultProfile(subjectId);
+  return normalizeProfile(subjectId, memory.profiles.get(subjectId));
 }
 
 async function saveProfile(profile) {
   const subjectId = profile.subjectId || profile.playerId;
   if (!subjectId) throw new Error('Profile subjectId is required');
 
-  const next = { ...profile, subjectId, updatedAt: nowIso() };
+  const next = normalizeProfile(subjectId, { ...profile, updatedAt: nowIso() });
   const redis = await db.getRedisClient();
   if (redis) {
     try {
@@ -97,9 +137,9 @@ async function applyDailyCheckin(subjectId, eventData) {
   const current = await getProfile(subjectId);
   const next = {
     ...current,
-    streak: Number(eventData.streak || 0),
-    totalCheckins: Number(eventData.totalCheckins || 0),
-    lastCheckInDay: Number(eventData.day || 0),
+    streak: toFiniteNumber(eventData.streak, 0),
+    totalCheckins: toFiniteNumber(eventData.totalCheckins, 0),
+    lastCheckInDay: toFiniteNumber(eventData.day, 0),
     lastCheckInAt: dayToIso(eventData.day),
     nextCheckInAt: unixToIso(eventData.nextCheckInAt),
     canCheckInNow: false,
@@ -115,9 +155,9 @@ async function syncFromOnchain(subjectId, onchainStats) {
   const current = await getProfile(subjectId);
   const next = {
     ...current,
-    streak: Number(onchainStats.streak || 0),
-    totalCheckins: Number(onchainStats.totalCheckins || 0),
-    lastCheckInDay: Number(onchainStats.lastCheckInDay || 0),
+    streak: toFiniteNumber(onchainStats.streak, 0),
+    totalCheckins: toFiniteNumber(onchainStats.totalCheckins, 0),
+    lastCheckInDay: toFiniteNumber(onchainStats.lastCheckInDay, 0),
     lastCheckInAt: dayToIso(onchainStats.lastCheckInDay),
     nextCheckInAt: unixToIso(onchainStats.nextCheckInAt),
     canCheckInNow: Boolean(onchainStats.canCheckInNow)

@@ -1,21 +1,13 @@
-const { ethers } = require('ethers');
 const { badRequest, getPlayerId, json, methodGuard, readBody, tooManyRequests } = require('../_lib/http');
 const { checkRateLimit } = require('../_lib/rate-limit');
 const store = require('../_lib/checkin-store');
+const { normalizeAddress, normalizeTxHash } = require('../_lib/evm');
+const { getBaseProvider } = require('../_lib/base-provider');
 const {
   BASE_CHAIN_ID,
   getCheckinContractAddress,
   parseCheckinEventFromReceipt
 } = require('../_lib/checkin-contract');
-
-let provider = null;
-
-function getProvider() {
-  if (provider) return provider;
-  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
-  provider = new ethers.JsonRpcProvider(rpcUrl, BASE_CHAIN_ID);
-  return provider;
-}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -64,11 +56,13 @@ module.exports = async function handler(req, res) {
     });
     if (!rl.allowed) return tooManyRequests(res, 'Too many onchain execute requests', rl.retryAfterMs);
 
-    const txHash = String(body.txHash || '').trim().toLowerCase();
-    if (!/^0x[a-f0-9]{64}$/.test(txHash)) return badRequest(res, 'Valid txHash is required');
+    const txHash = normalizeTxHash(body.txHash);
+    if (!txHash) return badRequest(res, 'Valid txHash is required');
 
-    const expectedAddressRaw = String(body.address || req.headers['x-wallet-address'] || '').trim().toLowerCase();
-    const expectedAddress = /^0x[a-f0-9]{40}$/.test(expectedAddressRaw) ? expectedAddressRaw : null;
+    const expectedAddressRaw = body.address || req.headers['x-wallet-address'];
+    const hasExpectedAddress = String(expectedAddressRaw || '').trim().length > 0;
+    const expectedAddress = normalizeAddress(expectedAddressRaw);
+    if (hasExpectedAddress && !expectedAddress) return badRequest(res, 'Valid wallet address is required');
 
     const contractAddress = getCheckinContractAddress();
     if (!contractAddress) {
@@ -99,7 +93,7 @@ module.exports = async function handler(req, res) {
         return json(res, 200, { ok: true, ...existingClaimAfterLock, idempotent: true });
       }
 
-      const rpc = getProvider();
+      const rpc = getBaseProvider();
       const { tx, receipt } = await waitForBaseVisibility(rpc, txHash);
       if (!receipt) return badRequest(res, 'Transaction not visible on Base RPC yet. Retry in a few seconds.');
       if (receipt.status !== 1) return badRequest(res, 'Transaction failed');

@@ -1,4 +1,5 @@
 const { ethers } = require('ethers');
+const { normalizeAddress } = require('./evm');
 
 const BASE_CHAIN_ID = 8453;
 const DAY_SECONDS = 24 * 60 * 60;
@@ -11,9 +12,7 @@ const CHECKIN_ABI = [
 const checkinInterface = new ethers.Interface(CHECKIN_ABI);
 
 function getCheckinContractAddress() {
-  const value = String(process.env.CHECKIN_CONTRACT_ADDRESS || '').trim().toLowerCase();
-  if (!/^0x[a-f0-9]{40}$/.test(value)) return null;
-  return value;
+  return normalizeAddress(process.env.CHECKIN_CONTRACT_ADDRESS);
 }
 
 function encodeCheckinCalldata() {
@@ -43,12 +42,13 @@ function normalizeStats(stats) {
 
 async function readOnchainStats(provider, contractAddress, account) {
   if (!provider || !contractAddress || !account) return null;
-  if (!/^0x[a-f0-9]{40}$/.test(String(account).toLowerCase())) return null;
+  const normalizedAccount = normalizeAddress(account);
+  if (!normalizedAccount) return null;
 
   const contract = new ethers.Contract(contractAddress, CHECKIN_ABI, provider);
   let raw = null;
   try {
-    raw = await contract.getStats(account);
+    raw = await contract.getStats(normalizedAccount);
   } catch {
     return null;
   }
@@ -57,9 +57,11 @@ async function readOnchainStats(provider, contractAddress, account) {
 }
 
 function parseCheckinEventFromReceipt(receipt, contractAddress) {
-  const target = String(contractAddress || '').toLowerCase();
+  const target = normalizeAddress(contractAddress);
+  if (!target) return null;
+
   for (const log of receipt?.logs || []) {
-    if (String(log.address || '').toLowerCase() !== target) continue;
+    if (normalizeAddress(log.address) !== target) continue;
 
     let parsed = null;
     try {
@@ -69,8 +71,8 @@ function parseCheckinEventFromReceipt(receipt, contractAddress) {
     }
     if (!parsed || parsed.name !== 'CheckedIn') continue;
 
-    const account = String(parsed.args.account || '').toLowerCase();
-    if (!/^0x[a-f0-9]{40}$/.test(account)) continue;
+    const account = normalizeAddress(parsed.args.account);
+    if (!account) continue;
 
     const streak = toNumber(parsed.args.streak, 0);
     const totalCheckins = toNumber(parsed.args.totalCheckIns, 0);
@@ -92,11 +94,9 @@ function parseCheckinEventFromReceipt(receipt, contractAddress) {
 
 module.exports = {
   BASE_CHAIN_ID,
-  CHECKIN_ABI,
   DAY_SECONDS,
   encodeCheckinCalldata,
   getCheckinContractAddress,
-  normalizeStats,
   parseCheckinEventFromReceipt,
   readOnchainStats
 };
