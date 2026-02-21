@@ -1,10 +1,13 @@
 const playerId = ensurePlayerId();
 const CONNECTED_FLAG_KEY = 'daily_streak_wallet_connected';
+const LAST_ADDRESS_KEY = 'daily_streak_last_address';
 const state = {
   address: null,
+  lastKnownAddress: getLastKnownAddress(),
   profile: null,
   busy: false,
-  refreshInFlight: false
+  refreshInFlight: false,
+  profileHydrated: false
 };
 
 const el = {
@@ -59,12 +62,13 @@ function defaultProfile() {
 }
 
 async function api(path, options = {}) {
+  const walletHeaderAddress = state.address || state.lastKnownAddress || null;
   const response = await fetch(path, {
     ...options,
     headers: {
       'content-type': 'application/json',
       'x-player-id': playerId,
-      ...(state.address ? { 'x-wallet-address': state.address } : {}),
+      ...(walletHeaderAddress ? { 'x-wallet-address': walletHeaderAddress } : {}),
       ...(options.headers || {})
     }
   });
@@ -122,7 +126,9 @@ async function connectWalletInternal({ allowPrompt, source }) {
     }
 
     state.address = String(address).toLowerCase();
+    state.lastKnownAddress = state.address;
     localStorage.setItem(CONNECTED_FLAG_KEY, '1');
+    localStorage.setItem(LAST_ADDRESS_KEY, state.address);
     renderState();
     refreshState({ silent: true });
     log(`Wallet connected (${source}): ${short(state.address)}`);
@@ -140,9 +146,12 @@ async function refreshState(options = {}) {
   try {
     const payload = await api('/api/streak/state');
     state.profile = payload.profile || defaultProfile();
+    state.profileHydrated = true;
     renderState();
+    return payload;
   } catch (error) {
     if (!silent) log(`State refresh failed: ${error.message}`);
+    return null;
   } finally {
     state.refreshInFlight = false;
   }
@@ -150,6 +159,7 @@ async function refreshState(options = {}) {
 
 async function runDailyCheckin() {
   if (state.busy) return;
+  await refreshState({ silent: true });
   if (!isReadyNow()) {
     log('Daily check-in is still on cooldown.');
     return;
@@ -165,6 +175,11 @@ async function runDailyCheckin() {
     }
 
     await ensureBaseMainnet();
+    await refreshState({ silent: true });
+    if (!isReadyNow()) {
+      log('Daily check-in is on cooldown after state refresh.');
+      return;
+    }
     const prepared = await api('/api/streak/prepare', {
       method: 'POST',
       body: JSON.stringify({})
@@ -239,6 +254,9 @@ async function sendCheckinTransaction(txRequest) {
     if (!txHash) throw new Error('Transaction hash missing');
     return { txHash };
   } catch (error) {
+    if (isUserRejectedError(error)) {
+      throw new Error('User rejected transaction');
+    }
     try {
       const callId = await window.ethereum.request({
         method: 'wallet_sendCalls',
@@ -257,8 +275,11 @@ async function sendCheckinTransaction(txRequest) {
       });
       if (!callId) throw new Error('wallet_sendCalls did not return id');
       return { callId };
-    } catch {
-      throw new Error(`Unable to submit onchain tx: ${error.message}`);
+    } catch (fallbackError) {
+      if (isUserRejectedError(fallbackError)) {
+        throw new Error('User rejected transaction');
+      }
+      throw new Error(`Unable to submit onchain tx: ${fallbackError?.message || error.message}`);
     }
   }
 }
@@ -301,7 +322,9 @@ async function waitForCallTransactionHash(callId, timeoutMs = 120_000) {
 function renderState() {
   const profile = { ...defaultProfile(), ...(state.profile || {}) };
   el.connectBtn.textContent = state.address ? short(state.address) : 'Connect Wallet';
-  el.walletBadge.textContent = state.address ? short(state.address) : 'Not Connected';
+  el.walletBadge.textContent = state.address
+    ? short(state.address)
+    : (state.lastKnownAddress ? `Last ${short(state.lastKnownAddress)}` : 'Not Connected');
   el.networkBadge.textContent = 'Base Mainnet';
 
   el.statsGrid.innerHTML = `
@@ -330,6 +353,7 @@ function updateTimingUI() {
   const ready = isReadyNow();
   const profile = { ...defaultProfile(), ...(state.profile || {}) };
   const connected = Boolean(state.address);
+  const hasProfile = state.profileHydrated;
 
   el.statusBadge.textContent = ready ? 'Ready' : 'Cooldown';
   el.statusBadge.style.borderColor = ready ? 'rgba(34,217,137,0.45)' : 'rgba(255,151,86,0.45)';
@@ -341,7 +365,11 @@ function updateTimingUI() {
   if (!connected) {
     el.checkinBtn.disabled = state.busy;
     el.checkinBtn.textContent = state.busy ? 'Processing...' : 'Connect Wallet To Check-In';
-    el.cooldownHint.textContent = 'Connect wallet to start your daily streak.';
+    if (state.lastKnownAddress && hasProfile) {
+      el.cooldownHint.textContent = `Last known wallet ${short(state.lastKnownAddress)} loaded. Connect to send tx.`;
+    } else {
+      el.cooldownHint.textContent = 'Connect wallet to start your daily streak.';
+    }
     return;
   }
 
@@ -397,7 +425,9 @@ function onAccountsChanged(accounts) {
   }
 
   state.address = String(address).toLowerCase();
+  state.lastKnownAddress = state.address;
   localStorage.setItem(CONNECTED_FLAG_KEY, '1');
+  localStorage.setItem(LAST_ADDRESS_KEY, state.address);
   renderState();
   refreshState({ silent: true });
 }
@@ -406,6 +436,12 @@ function onDisconnect() {
   state.address = null;
   localStorage.removeItem(CONNECTED_FLAG_KEY);
   renderState();
+}
+
+function getLastKnownAddress() {
+  const value = String(localStorage.getItem(LAST_ADDRESS_KEY) || '').trim().toLowerCase();
+  if (/^0x[a-f0-9]{40}$/.test(value)) return value;
+  return null;
 }
 
 function isBaseAppContext() {
@@ -429,6 +465,17 @@ function normalizeHexValue(value) {
     throw new Error('Invalid transaction value from prepare endpoint');
   }
   return normalized;
+}
+
+function isUserRejectedError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    error?.code === 4001 ||
+    message.includes('user rejected') ||
+    message.includes('user denied') ||
+    message.includes('rejected the request') ||
+    message.includes('cancelled')
+  );
 }
 
 function pad(value) {
