@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 const root = process.cwd();
 const siteDir = resolve(root, "site");
 const publicDir = resolve(root, "public");
-const appUrl = (process.env.APP_URL ?? "https://example.com").replace(/\/$/, "");
+const appUrl = resolveAppUrl();
 
 await rm(publicDir, { recursive: true, force: true });
 await mkdir(publicDir, { recursive: true });
@@ -39,4 +39,39 @@ function escapeHtmlAttribute(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function resolveAppUrl() {
+  const appUrl = normalizeHttpUrl(process.env.APP_URL);
+  if (appUrl) return appUrl;
+
+  const projectProductionUrl = normalizeHostLikeUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL);
+  if (projectProductionUrl) return projectProductionUrl;
+
+  const vercelUrl = normalizeHostLikeUrl(process.env.VERCEL_URL);
+  if (vercelUrl) return vercelUrl;
+
+  return "https://daily-streak-lite.vercel.app";
+}
+
+function normalizeHttpUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHostLikeUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const host = raw.replace(/^https?:\/\//i, "").split("/")[0].trim();
+  if (!host) return null;
+  return `https://${host}`.replace(/\/$/, "");
 }
