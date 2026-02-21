@@ -382,7 +382,7 @@ function updateTimingUI() {
   el.checkinBtn.textContent = state.busy ? 'Processing...' : (ready ? 'Run Daily Check-In' : 'Cooldown Active');
   el.cooldownHint.textContent = ready
     ? 'Ready now. Submit one low-cost check-in transaction.'
-    : `Next check-in in ${formatRemaining(profile.nextCheckInAt)}.`;
+    : 'Cooldown active. Time is shown in Next Check-In above.';
 }
 
 function isReadyNow() {
