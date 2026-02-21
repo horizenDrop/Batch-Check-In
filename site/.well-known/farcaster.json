@@ -1,4 +1,9 @@
 {
+  "accountAssociation": {
+    "header": "eyJmaWQiOjI4MjQxNzIsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHhBNEFFNzM3NDI1MjBFZGRiRGQ2OGQxM2I4QjEyZDJBYkNmOWYyYzYwIn0",
+    "payload": "eyJkb21haW4iOiJkYWlseS1zdHJlYWstbGl0ZS52ZXJjZWwuYXBwIn0",
+    "signature": "5GFs0+JgzHTv4qdlJcU4+LBXMnfY+jiJvJAYQV5JcgJf7G52m+7A/wX9eqyqtLbI+hqrdI//1OgcWkGeNjkjWxs="
+  },
   "frame": {
     "version": "1",
     "name": "Daily Streak Lite",
