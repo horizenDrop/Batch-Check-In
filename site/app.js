@@ -2,6 +2,7 @@ const playerId = ensurePlayerId();
 const CONNECTED_FLAG_KEY = 'daily_streak_wallet_connected';
 const LAST_ADDRESS_KEY = 'daily_streak_last_address';
 const ANALYTICS_ENDPOINT = '/api/analytics/track';
+let miniAppSdkModulePromise = null;
 const state = {
   address: null,
   lastKnownAddress: getLastKnownAddress(),
@@ -553,12 +554,12 @@ function log(message) {
 }
 
 async function notifyMiniAppReady(attempt = 0) {
-  const sdkRef = getMiniAppSdk();
-  if (sdkRef?.actions?.ready) {
+  const sdkRef = await loadMiniAppSdk();
+  if (sdkRef?.sdk?.actions?.ready && typeof sdkRef.sdk.actions.ready === 'function') {
     try {
-      await sdkRef.actions.ready();
+      await sdkRef.sdk.actions.ready();
       trackEvent('miniapp_ready_sent', {
-        sdkProvider: sdkRef.provider || 'global',
+        sdkProvider: sdkRef.provider,
         attempt
       });
       return true;
@@ -575,7 +576,25 @@ async function notifyMiniAppReady(attempt = 0) {
   return notifyMiniAppReady(attempt + 1);
 }
 
-function getMiniAppSdk() {
+async function loadMiniAppSdk() {
+  const globalSdk = getGlobalMiniAppSdk();
+  if (globalSdk) return globalSdk;
+
+  if (!miniAppSdkModulePromise) {
+    miniAppSdkModulePromise = import('https://esm.sh/@farcaster/miniapp-sdk')
+      .then((module) => {
+        if (module?.sdk?.actions?.ready && typeof module.sdk.actions.ready === 'function') {
+          return { provider: 'esm:@farcaster/miniapp-sdk', sdk: module.sdk };
+        }
+        return null;
+      })
+      .catch(() => null);
+  }
+
+  return miniAppSdkModulePromise;
+}
+
+function getGlobalMiniAppSdk() {
   const candidates = [
     { provider: 'miniapp.sdk', sdk: globalThis?.miniapp?.sdk },
     { provider: 'frame.sdk', sdk: globalThis?.frame?.sdk },

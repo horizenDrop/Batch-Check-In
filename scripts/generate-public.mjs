@@ -16,7 +16,7 @@ const frameObject = {
   button: {
     title: "Open Daily Streak",
     action: {
-      type: "launch_miniapp",
+      type: "launch_frame",
       name: "Daily Streak Lite",
       url: appUrl,
       splashBackgroundColor: "#0b1220"
@@ -26,7 +26,8 @@ const frameObject = {
 
 const indexPath = resolve(publicDir, "index.html");
 const currentIndex = await readFile(indexPath, "utf8");
-const nextIndex = currentIndex.replace("__FC_FRAME__", escapeHtmlAttribute(JSON.stringify(frameObject)));
+const embedPayload = escapeHtmlAttribute(JSON.stringify(frameObject));
+const nextIndex = currentIndex.split("__FC_FRAME__").join(embedPayload);
 await writeFile(indexPath, nextIndex, "utf8");
 
 await writeFile(resolve(publicDir, "og.svg"), `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#0b1220"/><text x="50%" y="50%" fill="#ffffff" font-size="72" text-anchor="middle" dominant-baseline="middle">Daily Streak Lite</text></svg>`, "utf8");

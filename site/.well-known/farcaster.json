@@ -4,15 +4,36 @@
     "payload": "eyJkb21haW4iOiJkYWlseS1zdHJlYWstbGl0ZS52ZXJjZWwuYXBwIn0",
     "signature": "5GFs0+JgzHTv4qdlJcU4+LBXMnfY+jiJvJAYQV5JcgJf7G52m+7A/wX9eqyqtLbI+hqrdI//1OgcWkGeNjkjWxs="
   },
+  "baseBuilder": {
+    "allowedAddresses": [
+      "0xA4AE73742520EddbDd68d13b8B12d2AbCf9f2c60"
+    ]
+  },
   "miniapp": {
     "version": "1",
     "name": "Daily Streak Lite",
+    "subtitle": "Daily check-ins on Base",
+    "description": "One onchain check-in per day on Base Mainnet. Keep your streak alive and track offchain and onchain activity.",
+    "tagline": "One check-in per day on Base",
     "iconUrl": "https://daily-streak-lite.vercel.app/og.svg",
+    "heroImageUrl": "https://daily-streak-lite.vercel.app/og.svg",
     "homeUrl": "https://daily-streak-lite.vercel.app",
     "imageUrl": "https://daily-streak-lite.vercel.app/og.svg",
+    "screenshotUrls": [
+      "https://daily-streak-lite.vercel.app/og.svg"
+    ],
     "buttonTitle": "Open Daily Streak",
     "splashImageUrl": "https://daily-streak-lite.vercel.app/og.svg",
     "splashBackgroundColor": "#0b1220",
+    "primaryCategory": "games",
+    "tags": [
+      "checkin",
+      "streak",
+      "base"
+    ],
+    "ogTitle": "Daily Streak Lite",
+    "ogDescription": "Daily check-ins on Base with lightweight analytics.",
+    "ogImageUrl": "https://daily-streak-lite.vercel.app/og.svg",
     "webhookUrl": "https://daily-streak-lite.vercel.app/api/webhook"
   }
 }
