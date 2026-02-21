@@ -18,8 +18,7 @@ const el = {
   networkBadge: document.getElementById('networkBadge'),
   statusBadge: document.getElementById('statusBadge'),
   statsGrid: document.getElementById('statsGrid'),
-  cooldownHint: document.getElementById('cooldownHint'),
-  log: document.getElementById('log')
+  cooldownHint: document.getElementById('cooldownHint')
 };
 
 init();
@@ -347,10 +346,6 @@ function renderState() {
       <div class="stat-value">${profile.totalCheckins}</div>
     </article>
     <article class="stat-box">
-      <div class="stat-label">Last Check-In</div>
-      <div class="stat-value small">${formatTimestamp(profile.lastCheckInAt)}</div>
-    </article>
-    <article class="stat-box">
       <div class="stat-label">Next Check-In</div>
       <div id="nextCheckinValue" class="stat-value small cyan">${formatNextCheckInText(profile)}</div>
     </article>
@@ -418,13 +413,6 @@ function formatRemaining(nextCheckInAt) {
 
   if (days > 0) return `${days}d ${pad(hours)}h ${pad(minutes)}m`;
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-}
-
-function formatTimestamp(iso) {
-  if (!iso) return '--';
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return '--';
-  return `${parsed.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
 function onAccountsChanged(accounts) {
@@ -497,6 +485,5 @@ function sleep(ms) {
 }
 
 function log(message) {
-  const line = `[${new Date().toISOString()}] ${message}`;
-  el.log.textContent = `${line}\n${el.log.textContent}`.slice(0, 6000);
+  console.log(`[daily-streak] ${message}`);
 }

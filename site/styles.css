@@ -169,7 +169,7 @@ button:disabled {
 .stats-grid {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -218,21 +218,6 @@ button:disabled {
 .hint {
   margin: 0;
   color: var(--muted);
-}
-
-.log {
-  margin: 10px 0 0;
-  max-height: 220px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px;
-  background: #0a101c;
-  color: #cbdbff;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
 }
 
 @media (max-width: 740px) {
