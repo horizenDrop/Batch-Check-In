@@ -27,7 +27,7 @@ Legacy aliases `/api/checkin/*` remain for backward compatibility.
   - `CheckedIn(address account, uint32 streak, uint64 totalCheckIns, uint64 day, uint64 nextCheckInAt)`
 
 ## Environment
-- `APP_URL=https://batch-check-in.vercel.app`
+- `APP_URL=https://daily-streak-lite.vercel.app`
 - `BASE_RPC_URL=https://mainnet.base.org`
 - `CHECKIN_CONTRACT_ADDRESS=0x...` (deployed `DailyStreakLite` on Base Mainnet)
 - `REDIS_URL=redis://...` or `REDIS_URL=rediss://...` (optional, for persistent storage)

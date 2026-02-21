@@ -7,12 +7,12 @@
   "frame": {
     "version": "1",
     "name": "Daily Streak Lite",
-    "iconUrl": "https://batch-check-in.vercel.app/og.svg",
-    "homeUrl": "https://batch-check-in.vercel.app",
-    "imageUrl": "https://batch-check-in.vercel.app/og.svg",
+    "iconUrl": "https://daily-streak-lite.vercel.app/og.svg",
+    "homeUrl": "https://daily-streak-lite.vercel.app",
+    "imageUrl": "https://daily-streak-lite.vercel.app/og.svg",
     "buttonTitle": "Open Daily Streak",
-    "splashImageUrl": "https://batch-check-in.vercel.app/og.svg",
+    "splashImageUrl": "https://daily-streak-lite.vercel.app/og.svg",
     "splashBackgroundColor": "#0b1220",
-    "webhookUrl": "https://batch-check-in.vercel.app/api/webhook"
+    "webhookUrl": "https://daily-streak-lite.vercel.app/api/webhook"
   }
 }
