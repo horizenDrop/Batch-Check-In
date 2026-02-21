@@ -7,6 +7,7 @@ const state = {
   lastKnownAddress: getLastKnownAddress(),
   profile: null,
   busy: false,
+  offchainBusy: false,
   refreshInFlight: false,
   refreshQueued: false,
   profileHydrated: false
@@ -15,11 +16,13 @@ const state = {
 const el = {
   connectBtn: document.getElementById('connectBtn'),
   checkinBtn: document.getElementById('checkinBtn'),
+  offchainCheckinBtn: document.getElementById('offchainCheckinBtn'),
   walletBadge: document.getElementById('walletBadge'),
   networkBadge: document.getElementById('networkBadge'),
   statusBadge: document.getElementById('statusBadge'),
   statsGrid: document.getElementById('statsGrid'),
-  cooldownHint: document.getElementById('cooldownHint')
+  cooldownHint: document.getElementById('cooldownHint'),
+  offchainHint: document.getElementById('offchainHint')
 };
 
 init();
@@ -39,6 +42,7 @@ function init() {
 function bindEvents() {
   el.connectBtn.addEventListener('click', connectWallet);
   el.checkinBtn.addEventListener('click', runDailyCheckin);
+  el.offchainCheckinBtn.addEventListener('click', runOffchainCheckin);
 
   if (window.ethereum && typeof window.ethereum.on === 'function') {
     window.ethereum.on('accountsChanged', onAccountsChanged);
@@ -250,6 +254,36 @@ async function runDailyCheckin() {
   }
 }
 
+async function runOffchainCheckin() {
+  if (state.offchainBusy) return;
+  state.offchainBusy = true;
+  updateTimingUI();
+
+  try {
+    await api(ANALYTICS_ENDPOINT, {
+      method: 'POST',
+      body: JSON.stringify({
+        event: 'offchain_checkin',
+        source: 'client_ui',
+        address: state.address || state.lastKnownAddress || null,
+        payload: {
+          walletConnected: Boolean(state.address),
+          network: 'base_mainnet'
+        }
+      })
+    });
+
+    el.offchainHint.textContent = 'Offchain check-in event sent.';
+    log('Offchain check-in event sent.');
+  } catch (error) {
+    el.offchainHint.textContent = `Offchain check-in failed: ${safeErrorMessage(error)}`;
+    log(`Offchain check-in failed: ${error.message}`);
+  } finally {
+    state.offchainBusy = false;
+    updateTimingUI();
+  }
+}
+
 async function ensureBaseMainnet() {
   if (!window.ethereum) throw new Error('Wallet provider not available');
   const chainId = await window.ethereum.request({ method: 'eth_chainId' });
@@ -398,11 +432,15 @@ function updateTimingUI() {
     } else {
       el.cooldownHint.textContent = 'Connect wallet to start your daily streak.';
     }
+    el.offchainCheckinBtn.disabled = state.offchainBusy;
+    el.offchainCheckinBtn.textContent = state.offchainBusy ? 'Sending Offchain Event...' : 'Offchain Check-In';
     return;
   }
 
   el.checkinBtn.disabled = state.busy || !ready;
   el.checkinBtn.textContent = state.busy ? 'Processing...' : (ready ? 'Run Daily Check-In' : 'Cooldown Active');
+  el.offchainCheckinBtn.disabled = state.offchainBusy;
+  el.offchainCheckinBtn.textContent = state.offchainBusy ? 'Sending Offchain Event...' : 'Offchain Check-In';
   el.cooldownHint.textContent = ready
     ? 'Ready now. Submit one low-cost check-in transaction.'
     : 'Cooldown active. Time is shown in Next Check-In above.';
